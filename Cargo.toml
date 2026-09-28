@@ -12,6 +12,7 @@ include = [
 	"README.md",
 	"coq/Equivalence.v",
 	"coq/Extraction.v",
+	"coq/Correspondence.v",
 	"coq/Invariants.v",
 	"coq/Proofs.v",
 	"coq/RustModel.v",

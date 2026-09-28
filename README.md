@@ -53,6 +53,7 @@ The formal development is split by responsibility:
 | --- | --- |
 | `coq/RustModel.v` | Standalone mathematical model of Rust words, bounded stack, fixed memory, state, instructions, errors, and post-error results |
 | `coq/Invariants.v` | Valid-state predicate and structural stack, memory, and PC representation preservation proofs |
+| `coq/Correspondence.v` | Separate Rust/Rocq state and instruction representations, explicit correspondence relations, independent instruction evaluators, and per-instruction success/failure proofs |
 | `coq/Syntax.v` | Bounded 32-bit words, instruction syntax, fixed-capacity state, and initial values |
 | `coq/Semantics.v` | Relational single-step semantics, modular arithmetic, PC advancement, memory/stack operations, and traps |
 | `coq/Proofs.v` | Stack and memory lemmas, progress witnesses, determinism results, and `u32::MAX` arithmetic/PC boundary proofs |
@@ -70,7 +71,7 @@ The VM accepts numeric jump targets only. If a source language uses symbolic lab
 
 The current Coq sources compile in dependency order without diagnostics under the configured gate. The proof files contain no `Admitted`, `admit`, custom axioms, or aborted proofs. The development includes machine-checked boundary results for `u32::MAX + 1`, `0 - 1`, and advancing a PC at `u32::MAX`, as well as selected stack, memory, and transition properties.
 
-`coq/RustModel.v` is intentionally independent of `coq/Syntax.v`. It defines Rust-shaped machine data and a failure result carrying the post-mutation state. No `rust_step_simulates_coq` theorem is currently claimed: the Rust-shaped model does not yet include an independent transition relation and representation proof connecting it to the Rust executor. The old identity-alias simulation claims have been removed rather than presented as cross-language verification.
+`coq/RustModel.v` is intentionally independent of `coq/Syntax.v`. `coq/Correspondence.v` defines a separate function-backed Rocq memory and separate Rocq stack/status/instruction/error types, an explicit active-stack-prefix and pointwise-memory representation relation, and independent Rust-shaped and Rocq instruction evaluators. Per-instruction theorems compare success results and failures with their post-mutation states; notably, JZ retains its popped condition on an invalid zero-branch target, and ADD/SUB retain the first pop on second-pop underflow. No theorem equates Rust and Rocq states or aliases one step function to the other. These Coq evaluators specify the transition behavior but do not mechanically execute or extract the compiled Rust program; external Rust-to-model refinement remains a separate validation boundary.
 
 Full behavioral equivalence requires a representation relation with suitable totality and injectivity properties, plus proof obligations connecting actual Rust transitions to Coq transitions in both directions. That end-to-end refinement is future work. Likewise, the Coq `step` relation is in `Prop` and is erased by standard extraction; the present extraction configuration does not generate an executable VM interpreter.
 
@@ -115,13 +116,14 @@ On Windows PowerShell:
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-coq.ps1
 ```
 
-The gate compiles `RustModel`, `Invariants`, `Syntax`, `Semantics`, `Proofs`, `Equivalence`, `Soundness`, and `Extraction` sequentially with default warnings enabled. It requires empty diagnostic logs and checks for the extracted `microverivm.ml` and `microverivm.mli` artifacts.
+The gate compiles `RustModel`, `Invariants`, `Correspondence`, `Syntax`, `Semantics`, `Proofs`, `Equivalence`, `Soundness`, and `Extraction` sequentially with default warnings enabled. It requires empty diagnostic logs and checks for the extracted `microverivm.ml` and `microverivm.mli` artifacts.
 
 For a direct compiler run from the repository root:
 
 ```sh
 coqc -q -w +default -Q coq MicroVeriVM coq/RustModel.v
 coqc -q -w +default -Q coq MicroVeriVM coq/Invariants.v
+coqc -q -w +default -Q coq MicroVeriVM coq/Correspondence.v
 coqc -q -w +default -Q coq MicroVeriVM coq/Syntax.v
 coqc -q -w +default -Q coq MicroVeriVM coq/Semantics.v
 coqc -q -w +default -Q coq MicroVeriVM coq/Proofs.v

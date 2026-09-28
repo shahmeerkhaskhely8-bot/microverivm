@@ -4,7 +4,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$files = @('RustModel', 'Invariants', 'Syntax', 'Semantics', 'Proofs', 'Equivalence', 'Soundness', 'Extraction')
+$files = @('RustModel', 'Invariants', 'Correspondence', 'Syntax', 'Semantics', 'Proofs', 'Equivalence', 'Soundness', 'Extraction')
 $statusPath = Join-Path $Root 'coq\compile-status.log'
 $overallExit = 0
 

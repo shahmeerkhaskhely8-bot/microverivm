@@ -85,6 +85,9 @@ The Coq layer contains the intended formal categories:
   bounded words, fixed-capacity storage, and post-state failures.
 - `Invariants.v`: a valid-state predicate and structural preservation proofs
   for stack, memory, and PC representation.
+- `Correspondence.v`: separate Rust/Rocq representations, explicit state and
+  instruction relations, independent evaluators, and instruction-level result
+  correspondence including post-error states.
 - `Equivalence.v`: stack and memory safety invariants for the legacy Coq model;
   it makes no cross-language simulation claim.
 - `Soundness.v`: successful multi-step traces and Coq trace safety properties.
@@ -98,6 +101,7 @@ memory-address validity. The dependency chain to compile is:
 ```text
 coq/RustModel.v
 coq/Invariants.v
+coq/Correspondence.v
 coq/Syntax.v
 coq/Semantics.v
 coq/Proofs.v
@@ -118,13 +122,14 @@ interpreter from the inductive `step` relation or the proof relations.
 
 ## Definition of Done
 
-Formal verification v1 does not currently claim a Rust-to-Coq forward
-simulation theorem. The earlier identity-alias simulation claims have been
-removed. `RustModel.v` defines independent Rust-shaped data and post-state
-failures, but an independent Rust transition relation and a proof connecting
-it to the executable Rust implementation remain future work. Full behavioral
-equivalence additionally requires an appropriate total and injective
-representation relation and proofs in both directions.
+The independent evaluators and instruction-level correspondence theorems in
+`Correspondence.v` compare separate Rust-shaped and Rocq states, including
+success and post-error states. They prove consistency between the two Coq
+specifications; they do not mechanically derive or execute the compiled Rust
+implementation. A verified connection from actual Rust transitions to the
+Rust-shaped evaluator remains future work. Full behavioral equivalence also
+requires an appropriate total and injective representation relation and
+proofs in both directions.
 
 V1 also requires the Coq dependency chain to compile with no diagnostics, the
 u32 boundary proofs to discharge, and the Rust check and end-to-end tests to

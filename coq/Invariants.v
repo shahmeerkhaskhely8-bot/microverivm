@@ -58,7 +58,7 @@ Qed.
 Theorem push_preserves_valid_stack :
   forall value before after,
     valid_stack before ->
-    rust_stack_push value before = RustStackPushed after ->
+    rust_stack_push value before = RustPushSuccess after ->
     valid_stack after.
 Proof.
   intros value before after _ _.
@@ -68,7 +68,7 @@ Qed.
 Theorem pop_preserves_valid_stack :
   forall before value after,
     valid_stack before ->
-    rust_stack_pop before = RustStackPopped value after ->
+    rust_stack_pop before = RustPopSuccess value after ->
     valid_stack after.
 Proof.
   intros before value after _ _.

@@ -140,10 +140,13 @@ Inductive RustError : Type :=
 | RustInvalidProgramCounter
 | RustInvalidInstruction.
 
-Inductive RustStackResult : Type :=
-| RustStackPushed (stack : RustStack)
-| RustStackPopped (value : RustWord) (stack : RustStack)
-| RustStackFailure (error : RustError) (stack : RustStack).
+Inductive RustPushResult : Type :=
+| RustPushSuccess (stack : RustStack)
+| RustPushFailure (error : RustError) (stack : RustStack).
+
+Inductive RustPopResult : Type :=
+| RustPopSuccess (value : RustWord) (stack : RustStack)
+| RustPopFailure (error : RustError) (stack : RustStack).
 
 Definition rust_stack_with_push
     (value : RustWord)
@@ -168,24 +171,24 @@ Proof.
 Defined.
 
 Definition rust_stack_push (value : RustWord) (stack : RustStack)
-    : RustStackResult :=
+  : RustPushResult :=
   match Compare_dec.lt_dec (length (rust_stack_values stack)) RUST_STACK_CAPACITY with
   | left below =>
-      RustStackPushed (rust_stack_with_push value stack below)
-  | right _ => RustStackFailure RustStackOverflow stack
+      RustPushSuccess (rust_stack_with_push value stack below)
+  | right _ => RustPushFailure RustStackOverflow stack
   end.
 
-Definition rust_stack_pop (stack : RustStack) : RustStackResult :=
+Definition rust_stack_pop (stack : RustStack) : RustPopResult :=
   match stack with
   | {| rust_stack_values := []; rust_stack_bounded := _ |} =>
-      RustStackFailure RustStackUnderflow stack
+      RustPopFailure RustStackUnderflow stack
   | {| rust_stack_values := value :: rest; rust_stack_bounded := bound |} =>
-      RustStackPopped value (rust_stack_with_tail rest bound)
+      RustPopSuccess value (rust_stack_with_tail rest bound)
   end.
 
 Theorem rust_stack_push_increases_length :
   forall value before after,
-    rust_stack_push value before = RustStackPushed after ->
+    rust_stack_push value before = RustPushSuccess after ->
     length (rust_stack_values after) = S (length (rust_stack_values before)).
 Proof.
   intros value before after Hpush.
@@ -200,7 +203,7 @@ Qed.
 Theorem rust_stack_push_at_capacity_overflows :
   forall value stack,
     length (rust_stack_values stack) = RUST_STACK_CAPACITY ->
-    rust_stack_push value stack = RustStackFailure RustStackOverflow stack.
+    rust_stack_push value stack = RustPushFailure RustStackOverflow stack.
 Proof.
   intros value stack Hcapacity.
   unfold rust_stack_push.
@@ -211,7 +214,7 @@ Qed.
 
 Theorem rust_stack_pop_decreases_length :
   forall before value after,
-    rust_stack_pop before = RustStackPopped value after ->
+    rust_stack_pop before = RustPopSuccess value after ->
     length (rust_stack_values before) = S (length (rust_stack_values after)).
 Proof.
   intros before value after Hpop.
@@ -229,7 +232,7 @@ Qed.
 Theorem rust_stack_pop_empty_underflows :
   forall stack,
     rust_stack_values stack = [] ->
-    rust_stack_pop stack = RustStackFailure RustStackUnderflow stack.
+    rust_stack_pop stack = RustPopFailure RustStackUnderflow stack.
 Proof.
   intros stack Hempty.
   unfold rust_stack_pop.
