@@ -1,2 +1,8 @@
 -R coq MicroVeriVM
-coq/*.v
+coq/Equivalence.v
+coq/Extraction.v
+coq/Proofs.v
+coq/Semantics.v
+coq/Soundness.v
+coq/Syntax.v
+coq/test.v
