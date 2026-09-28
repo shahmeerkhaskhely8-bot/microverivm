@@ -13,7 +13,7 @@ Set-Content -Path $statusPath -Value 'RUNNING' -Encoding UTF8
 try {
     $compilerPath = (Get-Command $Compiler -ErrorAction Stop).Source
     Add-Content $statusPath "compiler=$compilerPath"
-    $files = @('Syntax', 'Semantics', 'Proofs', 'Equivalence', 'Soundness', 'Extraction')
+    $files = @('RustModel', 'Invariants', 'Syntax', 'Semantics', 'Proofs', 'Equivalence', 'Soundness', 'Extraction')
     foreach ($name in $files) {
         $stdout = Join-Path $logDir "$name.stdout.log"
         $stderr = Join-Path $logDir "$name.stderr.log"
@@ -46,7 +46,7 @@ try {
             throw "Missing extracted artifact: $artifact"
         }
     }
-    Add-Content $statusPath 'PASS: all six files compiled sequentially with empty diagnostic logs'
+    Add-Content $statusPath 'PASS: all eight files compiled sequentially with empty diagnostic logs'
     Get-Content $statusPath
     exit 0
 } catch {

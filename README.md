@@ -2,7 +2,7 @@
 
 **A bounded 32-bit stack virtual machine with a Rust reference implementation and a Rocq (Coq) relational model.**
 
-MicroVeriVM is a small, dependency-free systems project for studying how a compact virtual machine can be implemented in safe Rust and described in a theorem prover. Its instruction set uses 32-bit words, a fixed-capacity operand stack, fixed-size word-addressed memory, numeric program-counter targets, and explicit execution traps. The package provides both a reusable Rust library and a small `cargo run` demonstration binary.
+MicroVeriVM is a small, dependency-free systems project for studying how a compact virtual machine can be implemented in safe Rust and described in a theorem prover. Its instruction set uses 32-bit words, a fixed-capacity operand stack, fixed-size word-addressed memory, numeric program-counter targets, and explicit execution traps. The package exposes a reusable Rust library; it intentionally has no parser or command-line interface.
 
 The executable Rust step function is deterministic. The Coq development specifies machine data and a relational small-step semantics, proves selected safety and boundary properties, and configures extraction of data and arithmetic definitions. The current development does **not** establish an independently mechanized refinement from the compiled Rust implementation to the Coq model; see [Formal assurance and scope](#formal-assurance-and-scope).
 
@@ -42,7 +42,6 @@ The crate is organized around a single-step executor and small, fixed-capacity s
 - `rust/src/state.rs` stores the PC, stack, memory, and running/halted status.
 - `rust/src/stack.rs` and `rust/src/memory.rs` implement bounded storage without heap allocation.
 - `rust/src/error.rs` defines execution traps for stack overflow/underflow, out-of-bounds memory, invalid PC, and invalid instruction.
-- `rust/src/main.rs` is a bounded command-line demonstration that executes a four-instruction addition program and prints its result.
 
 Integer-word arithmetic and sequential PC advancement use Rust's explicit wrapping operations. Thus addition and subtraction are evaluated modulo $2^{32}$; overflow does not panic. Stack and memory capacities remain independently checked. Jump targets are numeric `u32` addresses and must identify an instruction in the supplied program.
 
@@ -52,11 +51,13 @@ The formal development is split by responsibility:
 
 | File | Role |
 | --- | --- |
+| `coq/RustModel.v` | Standalone mathematical model of Rust words, bounded stack, fixed memory, state, instructions, errors, and post-error results |
+| `coq/Invariants.v` | Valid-state predicate and structural stack, memory, and PC representation preservation proofs |
 | `coq/Syntax.v` | Bounded 32-bit words, instruction syntax, fixed-capacity state, and initial values |
 | `coq/Semantics.v` | Relational single-step semantics, modular arithmetic, PC advancement, memory/stack operations, and traps |
 | `coq/Proofs.v` | Stack and memory lemmas, progress witnesses, determinism results, and `u32::MAX` arithmetic/PC boundary proofs |
-| `coq/Equivalence.v` | Rust/Coq aliases, representation relations, and step-simulation statements |
-| `coq/Soundness.v` | Successful multi-step traces and trace-level correspondence definitions |
+| `coq/Equivalence.v` | Stack and memory safety invariants for the legacy Coq semantics; it makes no cross-language simulation claim |
+| `coq/Soundness.v` | Successful multi-step traces and Coq trace safety properties |
 | `coq/Extraction.v` | OCaml extraction configuration for computational data and arithmetic |
 
 Coq words are naturals paired with a proof that the value is less than $2^{32}$. Modular results are brought back into that bounded domain. The model's PC increment wraps just as Rust's does.
@@ -69,7 +70,7 @@ The VM accepts numeric jump targets only. If a source language uses symbolic lab
 
 The current Coq sources compile in dependency order without diagnostics under the configured gate. The proof files contain no `Admitted`, `admit`, custom axioms, or aborted proofs. The development includes machine-checked boundary results for `u32::MAX + 1`, `0 - 1`, and advancing a PC at `u32::MAX`, as well as selected stack, memory, and transition properties.
 
-The theorem named `rust_step_simulates_coq` is a **shared-model forward-simulation statement**, not yet a proof connecting two independently defined implementations: in `coq/Equivalence.v`, both `rust_step` and `coq_step` are aliases for the same Coq relation, and the representation relations are identity relations. Its proof therefore establishes the stated result for that shared model; it does not by itself prove that compiled Rust execution refines Coq semantics.
+`coq/RustModel.v` is intentionally independent of `coq/Syntax.v`. It defines Rust-shaped machine data and a failure result carrying the post-mutation state. No `rust_step_simulates_coq` theorem is currently claimed: the Rust-shaped model does not yet include an independent transition relation and representation proof connecting it to the Rust executor. The old identity-alias simulation claims have been removed rather than presented as cross-language verification.
 
 Full behavioral equivalence requires a representation relation with suitable totality and injectivity properties, plus proof obligations connecting actual Rust transitions to Coq transitions in both directions. That end-to-end refinement is future work. Likewise, the Coq `step` relation is in `Prop` and is erased by standard extraction; the present extraction configuration does not generate an executable VM interpreter.
 
@@ -98,14 +99,13 @@ Run commands from the repository root.
 
 ```sh
 cargo fmt --check
-cargo run --locked
 cargo check --locked --all-targets
 cargo build --locked --all-targets
 cargo test --locked
 cargo clippy --locked --all-targets -- -D warnings
 ```
 
-`cargo run --locked` executes the built-in demo and prints `MicroVeriVM demo result: 42`. The integration suite is in `tests/end_to_end.rs`. It exercises all ten instructions, arithmetic wraparound, stack and memory traps, branching, invalid PCs, halt behavior, and arithmetic boundaries. A unit test also checks PC wraparound at `u32::MAX`.
+The integration suite is in `tests/end_to_end.rs`. It exercises all ten instructions, arithmetic wraparound, stack and memory traps, branching, invalid PCs, halt behavior, and arithmetic boundaries. A unit test also checks PC wraparound at `u32::MAX`.
 
 ### Coq / Rocq
 
@@ -115,11 +115,13 @@ On Windows PowerShell:
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-coq.ps1
 ```
 
-The gate compiles `Syntax`, `Semantics`, `Proofs`, `Equivalence`, `Soundness`, and `Extraction` sequentially with default warnings enabled. It requires empty diagnostic logs and checks for the extracted `microverivm.ml` and `microverivm.mli` artifacts.
+The gate compiles `RustModel`, `Invariants`, `Syntax`, `Semantics`, `Proofs`, `Equivalence`, `Soundness`, and `Extraction` sequentially with default warnings enabled. It requires empty diagnostic logs and checks for the extracted `microverivm.ml` and `microverivm.mli` artifacts.
 
 For a direct compiler run from the repository root:
 
 ```sh
+coqc -q -w +default -Q coq MicroVeriVM coq/RustModel.v
+coqc -q -w +default -Q coq MicroVeriVM coq/Invariants.v
 coqc -q -w +default -Q coq MicroVeriVM coq/Syntax.v
 coqc -q -w +default -Q coq MicroVeriVM coq/Semantics.v
 coqc -q -w +default -Q coq MicroVeriVM coq/Proofs.v

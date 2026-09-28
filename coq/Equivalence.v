@@ -1,144 +1,15 @@
-(* MicroVeriVM Phase 10: Rust/Coq correspondence and safety invariants. *)
+(* MicroVeriVM Phase 10: Coq model safety invariants. *)
 
 Set Warnings "-warn-library-file-stdlib-vector".
 
 From Stdlib Require Import NArith.NArith.
 From Stdlib Require Import Lia.
+From Stdlib Require Import Vectors.Vector.
 From MicroVeriVM Require Import Syntax.
 From MicroVeriVM Require Import Semantics.
 
-(* The Rust baseline and the Coq model use the same mathematical domains:
-   u32 words are represented by [word], instructions by [instruction], and
-   machine state/results by [state]/[result].  These aliases make that
-   correspondence explicit without introducing a second, divergent model. *)
-Definition rust_word := word.
-Definition rust_instruction := instruction.
-Definition rust_stack := stack.
-Definition rust_memory := memory.
-Definition rust_status := status.
-Definition rust_state := state.
-Definition rust_error := error.
-Definition rust_result := result.
-Definition rust_code := code.
-
-Definition rust_step := @step.
-Definition coq_step := @step.
-
-Definition word_corresponds (rust_value : rust_word) (coq_value : word) : Prop :=
-  rust_value = coq_value.
-
-Definition instruction_corresponds
-    (rust_value : rust_instruction) (coq_value : instruction) : Prop :=
-  rust_value = coq_value.
-
-Definition stack_corresponds
-    (rust_value : rust_stack) (coq_value : stack) : Prop :=
-  rust_value = coq_value.
-
-Definition memory_corresponds
-    (rust_value : rust_memory) (coq_value : memory) : Prop :=
-  rust_value = coq_value.
-
-Definition state_corresponds
-    (rust_value : rust_state) (coq_value : state) : Prop :=
-  rust_value = coq_value.
-
-Definition result_corresponds
-    (rust_value : rust_result) (coq_value : result) : Prop :=
-  rust_value = coq_value.
-
-(* Identity correspondence is total for the shared baseline domains. *)
-Lemma word_correspondence_refl :
-  forall value, word_corresponds value value.
-Proof.
-  intros value.
-  reflexivity.
-Qed.
-
-Lemma instruction_correspondence_refl :
-  forall value, instruction_corresponds value value.
-Proof.
-  intros value.
-  reflexivity.
-Qed.
-
-Lemma stack_correspondence_refl :
-  forall value, stack_corresponds value value.
-Proof.
-  intros value.
-  reflexivity.
-Qed.
-
-Lemma memory_correspondence_refl :
-  forall value, memory_corresponds value value.
-Proof.
-  intros value.
-  reflexivity.
-Qed.
-
-Lemma state_correspondence_refl :
-  forall value, state_corresponds value value.
-Proof.
-  intros value.
-  reflexivity.
-Qed.
-
-Lemma result_correspondence_refl :
-  forall value, result_corresponds value value.
-Proof.
-  intros value.
-  reflexivity.
-Qed.
-
-(* Forward simulation: every Rust-baseline step is represented by a Coq step. *)
-Theorem rust_step_simulates_coq :
-  forall program rust_state_value rust_result_value,
-    rust_step program rust_state_value rust_result_value ->
-    exists coq_state_value coq_result_value,
-      state_corresponds rust_state_value coq_state_value /\
-      result_corresponds rust_result_value coq_result_value /\
-      coq_step program coq_state_value coq_result_value.
-Proof.
-  intros program rust_state_value rust_result_value Hstep.
-  exists rust_state_value, rust_result_value.
-  repeat split; try reflexivity.
-  exact Hstep.
-Qed.
-
-(* Backward simulation: every Coq step is a Rust-baseline step. *)
-Theorem coq_to_rust_step_simulation :
-  forall program coq_state_value coq_result_value,
-    coq_step program coq_state_value coq_result_value ->
-    exists rust_state_value rust_result_value,
-      state_corresponds rust_state_value coq_state_value /\
-      result_corresponds rust_result_value coq_result_value /\
-      rust_step program rust_state_value rust_result_value.
-Proof.
-  intros program coq_state_value coq_result_value Hstep.
-  exists coq_state_value, coq_result_value.
-  repeat split; try reflexivity.
-  exact Hstep.
-Qed.
-
-(* Bisimulation for the shared Rust/Coq baseline relation. *)
-Theorem rust_coq_step_bisimulation :
-  forall program rust_state_value coq_state_value
-    rust_result_value coq_result_value,
-    state_corresponds rust_state_value coq_state_value ->
-    result_corresponds rust_result_value coq_result_value ->
-    rust_step program rust_state_value rust_result_value ->
-    coq_step program coq_state_value coq_result_value.
-Proof.
-  intros program rust_state_value coq_state_value
-    rust_result_value coq_result_value Hstate Hresult Hstep.
-  unfold state_corresponds in Hstate.
-  unfold result_corresponds in Hresult.
-  subst coq_state_value.
-  subst coq_result_value.
-  exact Hstep.
-Qed.
-
-(* Core stack invariant: every successful push remains within capacity. *)
+(* No Rust/Coq simulation theorem is claimed until an independent Rust
+   transition relation and a representation proof are available. *)
 Definition stack_bounded (s : stack) : Prop :=
   stack_depth s <= STACK_SIZE.
 

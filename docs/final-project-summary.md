@@ -81,15 +81,23 @@ The Coq layer contains the intended formal categories:
   memory, PC advancement, errors, and modular arithmetic.
 - `Proofs.v`: primitive safety, progress witnesses, and selected determinism
   properties.
-- `Equivalence.v`: Rust/Coq correspondence aliases, simulation, bisimulation,
-  and safety predicates.
-- `Soundness.v`: successful multi-step traces and trace-level correspondence.
+- `RustModel.v`: an independent Rust-shaped mathematical data model with
+  bounded words, fixed-capacity storage, and post-state failures.
+- `Invariants.v`: a valid-state predicate and structural preservation proofs
+  for stack, memory, and PC representation.
+- `Equivalence.v`: stack and memory safety invariants for the legacy Coq model;
+  it makes no cross-language simulation claim.
+- `Soundness.v`: successful multi-step traces and Coq trace safety properties.
 - `Extraction.v`: OCaml extraction setup.
 
-The formal v1 word type is bounded to the Rust `u32` domain, and arithmetic and
-PC advancement are modeled modulo $2^{32}$. The dependency chain to compile is:
+The independent Rust model's word type is bounded to the Rust `u32` domain and
+its arithmetic is modeled modulo $2^{32}$. It proves the requested addition
+and subtraction boundary cases, bounded stack operations and traps, and
+memory-address validity. The dependency chain to compile is:
 
 ```text
+coq/RustModel.v
+coq/Invariants.v
 coq/Syntax.v
 coq/Semantics.v
 coq/Proofs.v
@@ -110,14 +118,13 @@ interpreter from the inductive `step` relation or the proof relations.
 
 ## Definition of Done
 
-Formal verification v1 claims the forward-simulation theorem
-`rust_step_simulates_coq`: every Rust-baseline step has a corresponding Coq
-step under the stated representation relation. In the current development,
-both step aliases resolve to the same Coq relation, so this theorem proves the
-shared-model simulation; it is not yet a proof linked to compiled Rust
-execution. Full behavioral equivalence requires a representation relation
-that is total and injective; that stronger requirement is not implied merely
-by the forward-simulation claim.
+Formal verification v1 does not currently claim a Rust-to-Coq forward
+simulation theorem. The earlier identity-alias simulation claims have been
+removed. `RustModel.v` defines independent Rust-shaped data and post-state
+failures, but an independent Rust transition relation and a proof connecting
+it to the executable Rust implementation remain future work. Full behavioral
+equivalence additionally requires an appropriate total and injective
+representation relation and proofs in both directions.
 
 V1 also requires the Coq dependency chain to compile with no diagnostics, the
 u32 boundary proofs to discharge, and the Rust check and end-to-end tests to
@@ -166,5 +173,6 @@ Before calling MicroVeriVM a complete high-assurance artifact:
    interpreter is required.
 5. Run the Rust formatting, check, and integration test commands and record
    their final exit codes in CI.
-6. Review the generated artifact and the correspondence theorem against the
-   exact Rust executor behavior.
+6. Define the Rust-model transition relation and prove its refinement against
+  the exact Rust executor behavior before making cross-language equivalence
+  claims.

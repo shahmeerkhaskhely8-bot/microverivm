@@ -18,54 +18,6 @@ Inductive multi_step (program : code) : state -> state -> Prop :=
     multi_step program s' s'' ->
     multi_step program s s''.
 
-(* The Rust trace and Coq trace use the shared baseline relation established in
-   Phase 10.  Keeping these aliases separate makes the correspondence theorem
-   explicit while preserving exact semantic identity. *)
-Definition rust_trace := @multi_step.
-Definition coq_trace := @multi_step.
-
-Definition trace_corresponds
-    (rust_start rust_end coq_start coq_end : state) : Prop :=
-  state_corresponds rust_start coq_start /\
-  state_corresponds rust_end coq_end.
-
-Lemma multi_step_refl_corresponds :
-  forall s, trace_corresponds s s s s.
-Proof.
-  intros s.
-  repeat split; reflexivity.
-Qed.
-
-(* Every Rust successful trace has an exactly corresponding Coq trace. *)
-Theorem rust_trace_to_coq_trace :
-  forall program rust_start rust_end,
-    rust_trace program rust_start rust_end ->
-    exists coq_start coq_end,
-      trace_corresponds rust_start rust_end coq_start coq_end /\
-      coq_trace program coq_start coq_end.
-Proof.
-  intros program rust_start rust_end Htrace.
-  exists rust_start, rust_end.
-  split.
-  - repeat split; reflexivity.
-  - exact Htrace.
-Qed.
-
-(* Every Coq successful trace has an exactly corresponding Rust trace. *)
-Theorem coq_trace_to_rust_trace :
-  forall program coq_start coq_end,
-    coq_trace program coq_start coq_end ->
-    exists rust_start rust_end,
-      trace_corresponds rust_start rust_end coq_start coq_end /\
-      rust_trace program rust_start rust_end.
-Proof.
-  intros program coq_start coq_end Htrace.
-  exists coq_start, coq_end.
-  split.
-  - repeat split; reflexivity.
-  - exact Htrace.
-Qed.
-
 (* A trace preserves the endpoint's machine shape: stack storage remains
    bounded and memory remains a fixed-size vector. *)
 Theorem trace_preserves_memory_shape :
@@ -127,29 +79,3 @@ Proof.
   - exact (safe_trace_endpoint_safe program start finish Htrace).
 Qed.
 
-(* Multi-step bisimulation for the shared Rust baseline relation. *)
-Theorem rust_coq_trace_bisimulation :
-  forall program rust_start rust_end coq_start coq_end,
-    state_corresponds rust_start coq_start ->
-    state_corresponds rust_end coq_end ->
-    rust_trace program rust_start rust_end ->
-    coq_trace program coq_start coq_end.
-Proof.
-  intros program rust_start rust_end coq_start coq_end
-    Hstart Hend Htrace.
-  unfold state_corresponds in Hstart, Hend.
-  subst coq_start.
-  subst coq_end.
-  exact Htrace.
-Qed.
-
-(* Rust traces beginning from a safe state preserve memory shape directly. *)
-Theorem rust_trace_preserves_memory_shape :
-  forall program start finish,
-    state_safe start ->
-    rust_trace program start finish ->
-    memory_shaped (state_memory finish).
-Proof.
-  intros program start finish Hsafe Htrace.
-  exact (trace_preserves_memory_shape program start finish Hsafe Htrace).
-Qed.
