@@ -39,8 +39,4 @@ jobs:
     - name: Verify Coq Proofs and Models
       run: |
         eval $(opam env)
-        if [ -f "Makefile" ]; then
-          make
-        else
-          coqc -R coq/src MicroVeriVM coq/src/*.v
-        fi
+        coqc -R coq/src MicroVeriVM coq/src/*.v
