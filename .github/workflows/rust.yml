@@ -39,4 +39,4 @@ jobs:
     - name: Verify Coq Proofs and Models
       run: |
         eval $(opam env)
-        coqc -R coq/src MicroVeriVM coq/src/*.v
+        coqc -R coq MicroVeriVM coq/*.v
