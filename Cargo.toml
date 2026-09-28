@@ -1,0 +1,37 @@
+[package]
+name = "microverivm"
+version = "0.1.0"
+edition = "2021"
+description = "A bounded 32-bit stack virtual machine with a Coq formal model"
+license = "Apache-2.0"
+documentation = "https://docs.rs/microverivm"
+default-run = "microverivm"
+include = [
+	"Cargo.toml",
+	"LICENSE-APACHE",
+	"Makefile",
+	"README.md",
+	"coq/Equivalence.v",
+	"coq/Extraction.v",
+	"coq/Proofs.v",
+	"coq/Semantics.v",
+	"coq/Soundness.v",
+	"coq/Syntax.v",
+	"docs/**",
+	"rust/**",
+	"scripts/**",
+	"tests/**",
+]
+
+[lib]
+path = "rust/src/lib.rs"
+
+[[bin]]
+name = "microverivm"
+path = "rust/src/main.rs"
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"

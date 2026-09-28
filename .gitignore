@@ -1,0 +1,28 @@
+# Rust build output
+/target/
+
+# Coq compiler output
+/coq/*.vo
+/coq/*.vos
+/coq/*.vok
+/coq/*.glob
+/coq/*.aux
+/coq/*.log
+/coq/*.exit
+/coq/build-check/
+/coq/compile.status
+/coq/compile-status.log
+/coq/syntax-exit.txt
+
+# Extracted Coq output
+/microverivm.ml
+/microverivm.mli
+
+# Local compiler/test artifacts
+/.lia.cache
+/.*.aux
+/phase0-gate.log
+/test_syntax.glob
+/test_syntax.vo
+/test_syntax.vok
+/test_syntax.vos
