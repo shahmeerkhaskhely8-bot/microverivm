@@ -34,6 +34,11 @@ impl Memory {
         self.data[address] = value;
         Ok(())
     }
+
+    #[cfg(test)]
+    pub(crate) const fn storage(&self) -> &[u32; MEMORY_SIZE] {
+        &self.data
+    }
 }
 
 impl Default for Memory {

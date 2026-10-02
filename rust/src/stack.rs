@@ -53,6 +53,11 @@ impl Stack {
         self.depth
     }
 
+    #[cfg(test)]
+    pub(crate) const fn storage(&self) -> &[u32; STACK_SIZE] {
+        &self.data
+    }
+
     /// Returns whether the stack contains no words.
     pub const fn is_empty(&self) -> bool {
         self.depth == 0

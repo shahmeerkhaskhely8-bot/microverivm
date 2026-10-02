@@ -103,7 +103,7 @@ coq/RustModel.v
 coq/Invariants.v
 coq/Correspondence.v
 coq/Syntax.v
-coq/Semantics.v
+coq/Semantics.v 
 coq/Proofs.v
 coq/Equivalence.v
 coq/Soundness.v
@@ -143,7 +143,7 @@ Requested validation targets were reviewed:
 ```text
 cargo fmt --check
 cargo check --locked
-cargo test --locked
+cargo test --locked3  
 ```
 
 Verified in this environment: `cargo fmt --check`,

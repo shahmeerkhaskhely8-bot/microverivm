@@ -11,12 +11,38 @@ $statusPath = Join-Path $logDir 'status.txt'
 Set-Content -Path $statusPath -Value 'RUNNING' -Encoding UTF8
 
 try {
-    $compilerPath = (Get-Command $Compiler -ErrorAction Stop).Source
+    $compilerCandidates = @($Compiler)
+    if ($Compiler -eq 'coqc') {
+        $compilerCandidates += @(
+            'C:\Rocq-Platform~9.1~2026.01\bin\coqc.exe',
+            'C:\Rocq-Platform\bin\coqc.exe',
+            'C:\Program Files\Rocq\bin\coqc.exe',
+            'C:\Program Files (x86)\Rocq\bin\coqc.exe'
+        )
+    }
+    $compilerPath = $null
+    foreach ($candidate in $compilerCandidates) {
+        try {
+            $compilerPath = (Get-Command $candidate -ErrorAction Stop).Source
+            break
+        } catch {
+            if (Test-Path -LiteralPath $candidate) {
+                $compilerPath = $candidate
+                break
+            }
+        }
+    }
+    if (-not $compilerPath) {
+        throw "Unable to locate coqc; pass -Compiler <path-to-coqc> or install Rocq."
+    }
+    $compilerDirectory = Split-Path -Parent $compilerPath
+    $env:PATH = "$compilerDirectory;$env:PATH"
     Add-Content $statusPath "compiler=$compilerPath"
-    $files = @('RustModel', 'Invariants', 'Correspondence', 'Syntax', 'Semantics', 'Proofs', 'Equivalence', 'Soundness', 'Extraction')
+    $files = @('RustModel', 'Invariants', 'Correspondence', 'Syntax', 'Semantics', 'Proofs', 'Equivalence', 'Soundness', 'CanonicalAST', 'TargetAST', 'Bridge/RustLite', 'Bridge/Simulation', 'Bridge/TraceEquiv', 'Extraction')
     foreach ($name in $files) {
-        $stdout = Join-Path $logDir "$name.stdout.log"
-        $stderr = Join-Path $logDir "$name.stderr.log"
+        $logName = $name -replace '[/\\]', '-'
+        $stdout = Join-Path $logDir "$logName.stdout.log"
+        $stderr = Join-Path $logDir "$logName.stderr.log"
         Add-Content $statusPath "START $name"
         $process = Start-Process -FilePath $compilerPath -WorkingDirectory $root `
             -ArgumentList @('-q', '-w', '+default', '-Q', 'coq', 'MicroVeriVM', "coq/$name.v") `
@@ -46,7 +72,47 @@ try {
             throw "Missing extracted artifact: $artifact"
         }
     }
-    Add-Content $statusPath 'PASS: all nine files compiled sequentially with empty diagnostic logs'
+    $checkerPath = Join-Path $compilerDirectory 'coqchk.exe'
+    if (-not (Test-Path -LiteralPath $checkerPath)) {
+        throw "Missing kernel checker: $checkerPath"
+    }
+    $checkerStdout = Join-Path $logDir 'coqchk.stdout.log'
+    $checkerStderr = Join-Path $logDir 'coqchk.stderr.log'
+    $checkerModules = @(
+        'MicroVeriVM.RustModel',
+        'MicroVeriVM.Invariants',
+        'MicroVeriVM.Correspondence',
+        'MicroVeriVM.Syntax',
+        'MicroVeriVM.Semantics',
+        'MicroVeriVM.Proofs',
+        'MicroVeriVM.Equivalence',
+        'MicroVeriVM.Soundness',
+        'MicroVeriVM.CanonicalAST',
+        'MicroVeriVM.TargetAST',
+        'MicroVeriVM.Bridge.RustLite',
+        'MicroVeriVM.Bridge.Simulation',
+        'MicroVeriVM.Bridge.TraceEquiv',
+        'MicroVeriVM.Extraction'
+    )
+    $checker = Start-Process -FilePath $checkerPath -WorkingDirectory $root `
+        -ArgumentList (@('-Q', 'coq', 'MicroVeriVM') + $checkerModules) `
+        -RedirectStandardOutput $checkerStdout -RedirectStandardError $checkerStderr -PassThru
+    $checkerHandle = $checker.Handle
+    if (-not $checker.WaitForExit($TimeoutSeconds * 1000)) {
+        $checker.Kill()
+        $checker.WaitForExit()
+        throw "coqchk timed out after $TimeoutSeconds seconds"
+    }
+    $checker.WaitForExit()
+    if ($checker.ExitCode -ne 0) {
+        throw "coqchk failed; see $checkerStderr"
+    }
+    $checkerSucceeded = Select-String -Path $checkerStdout, $checkerStderr `
+        -Pattern 'Modules were successfully checked' -Quiet
+    if (-not $checkerSucceeded) {
+        throw 'coqchk exited successfully without reporting that modules were checked'
+    }
+    Add-Content $statusPath 'PASS: all fourteen files compiled sequentially; coqchk validated all fourteen modules'
     Get-Content $statusPath
     exit 0
 } catch {

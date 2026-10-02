@@ -1,8 +1,15 @@
--R coq MicroVeriVM
-coq/Equivalence.v
-coq/Extraction.v
-coq/Proofs.v
-coq/Semantics.v
-coq/Soundness.v
+-Q coq MicroVeriVM
+coq/RustModel.v
+coq/Invariants.v
+coq/Correspondence.v
 coq/Syntax.v
-coq/test.v
+coq/Semantics.v
+coq/Proofs.v
+coq/Equivalence.v
+coq/Soundness.v
+coq/CanonicalAST.v
+coq/TargetAST.v
+coq/Bridge/RustLite.v
+coq/Bridge/Simulation.v
+coq/Bridge/TraceEquiv.v
+coq/Extraction.v

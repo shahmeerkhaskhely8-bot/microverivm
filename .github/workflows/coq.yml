@@ -1,0 +1,50 @@
+name: Rocq Proof Verification
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-coq:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Rocq toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y opam make
+          opam init -y --disable-sandboxing
+          opam install -y coq
+          eval "$(opam env)"
+          echo "$PATH" >> "$GITHUB_PATH"
+
+      - name: Compile formal modules
+        run: |
+          coq_makefile -f _CoqProject -o Makefile.coq
+          make -f Makefile.coq
+
+      - name: Check proof kernel
+        run: |
+          coqchk -Q coq MicroVeriVM \
+            MicroVeriVM.RustModel \
+            MicroVeriVM.Invariants \
+            MicroVeriVM.Correspondence \
+            MicroVeriVM.Syntax \
+            MicroVeriVM.Semantics \
+            MicroVeriVM.Proofs \
+            MicroVeriVM.Equivalence \
+            MicroVeriVM.Soundness \
+            MicroVeriVM.CanonicalAST \
+            MicroVeriVM.TargetAST \
+            MicroVeriVM.Bridge.RustLite \
+            MicroVeriVM.Bridge.Simulation \
+            MicroVeriVM.Bridge.TraceEquiv \
+            MicroVeriVM.Extraction

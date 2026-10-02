@@ -69,6 +69,27 @@ Definition rust_state_corresponds
             rocq_memory rocq address) /\
   rust_status_corresponds (rust_status rust) (rocq_status rocq).
 
+Definition rust_view_corresponds
+    (view : RustStateView) (rocq : RocqState) : Prop :=
+  rust_word_value (rust_view_pc view) = rocq_pc rocq /\
+  List.map rust_word_value (rust_view_active_stack view) = rocq_stack rocq /\
+  (forall address,
+    rust_word_value (Vector.nth (rust_view_memory_data view) address) =
+      rocq_memory rocq address) /\
+  rust_status_corresponds (rust_view_status view) (rocq_status rocq).
+
+Theorem rust_view_corresponds_iff_projected_state :
+  forall view rocq,
+    rust_view_corresponds view rocq <->
+    rust_state_corresponds (rust_state_from_view view) rocq.
+Proof.
+  intros view rocq.
+  unfold rust_view_corresponds, rust_state_corresponds,
+    rust_state_from_view, rust_view_active_stack.
+  simpl.
+  tauto.
+Qed.
+
 Inductive rust_instruction_corresponds :
     RustInstruction -> RocqInstruction -> Prop :=
 | CorrespondCONST : forall rust_value rocq_value,

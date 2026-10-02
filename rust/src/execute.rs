@@ -3,7 +3,16 @@
 use crate::constants::MEMORY_SIZE;
 use crate::error::Error;
 use crate::instruction::Instruction;
+#[cfg(test)]
+use crate::state::StateView;
 use crate::state::{State, Status};
+
+/// The outcome and borrowed post-state of one execution attempt.
+#[cfg(test)]
+pub(crate) struct StepObservation<'a> {
+    pub(crate) outcome: Result<(), Error>,
+    pub(crate) after: StateView<'a>,
+}
 
 /// Executes the instruction at the state's current program counter.
 pub fn step(state: &mut State, code: &[Instruction]) -> Result<(), Error> {
@@ -82,6 +91,16 @@ pub fn step(state: &mut State, code: &[Instruction]) -> Result<(), Error> {
     }
 }
 
+/// Executes one instruction and returns a zero-copy view of the resulting state.
+#[cfg(test)]
+pub(crate) fn step_observed<'a>(state: &'a mut State, code: &[Instruction]) -> StepObservation<'a> {
+    let outcome = step(state, code);
+    StepObservation {
+        outcome,
+        after: state.view(),
+    }
+}
+
 fn advance_pc(state: &mut State) -> Result<(), Error> {
     state.set_pc(state.pc().wrapping_add(1));
     Ok(())
@@ -98,6 +117,7 @@ fn validate_target(target: u32, code_len: usize) -> Result<(), Error> {
 mod tests {
     use super::advance_pc;
     use super::step;
+    use super::step_observed;
     use super::validate_target;
     use crate::error::Error;
     use crate::instruction::Instruction;
@@ -129,5 +149,44 @@ mod tests {
             step(&mut state, &[Instruction::HALT]),
             Err(Error::InvalidProgramCounter)
         );
+    }
+
+    #[test]
+    fn observation_preserves_partial_add_pop_on_underflow() {
+        let mut state = State::new();
+        assert_eq!(state.stack_mut().push(17), Ok(()));
+
+        let observed = step_observed(&mut state, &[Instruction::ADD]);
+
+        assert_eq!(observed.outcome, Err(Error::StackUnderflow));
+        assert_eq!(observed.after.stack_depth, 0);
+        assert_eq!(observed.after.pc, 0);
+    }
+
+    #[test]
+    fn observation_preserves_stack_when_store_address_is_invalid() {
+        let mut state = State::new();
+        assert_eq!(state.stack_mut().push(23), Ok(()));
+
+        let observed = step_observed(&mut state, &[Instruction::STORE(u32::MAX)]);
+
+        assert_eq!(observed.outcome, Err(Error::MemoryOutOfBounds));
+        assert_eq!(observed.after.stack_depth, 1);
+        assert_eq!(observed.after.stack_data[0], 23);
+        assert_eq!(observed.after.memory_data[0], 0);
+        assert_eq!(observed.after.status, crate::state::Status::Running);
+        assert_eq!(observed.after.pc, 0);
+    }
+
+    #[test]
+    fn observation_preserves_jz_pop_before_invalid_target_failure() {
+        let mut state = State::new();
+        assert_eq!(state.stack_mut().push(0), Ok(()));
+
+        let observed = step_observed(&mut state, &[Instruction::JZ(u32::MAX)]);
+
+        assert_eq!(observed.outcome, Err(Error::InvalidProgramCounter));
+        assert_eq!(observed.after.stack_depth, 0);
+        assert_eq!(observed.after.pc, 0);
     }
 }

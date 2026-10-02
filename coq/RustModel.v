@@ -121,6 +121,52 @@ Record RustState : Type :=
   rust_status : RustStatus
 }.
 
+Record RustStateView : Type :=
+{
+  rust_view_pc : RustWord;
+  rust_view_stack_data : Vector.t RustWord RUST_STACK_CAPACITY;
+  rust_view_stack_depth : nat;
+  rust_view_stack_depth_bounded :
+    rust_view_stack_depth <= RUST_STACK_CAPACITY;
+  rust_view_memory_data : RustMemory;
+  rust_view_status : RustStatus
+}.
+
+Definition rust_view_active_stack (view : RustStateView) : list RustWord :=
+  List.rev (List.firstn (rust_view_stack_depth view)
+    (Vector.to_list (rust_view_stack_data view))).
+
+Lemma rust_length_firstn_le :
+  forall (A : Type) count (values : list A),
+    length (List.firstn count values) <= count.
+Proof.
+  intros A count.
+  induction count as [|count IH]; intros values; simpl.
+  - lia.
+  - destruct values as [|head tail]; simpl; [lia |].
+    specialize (IH tail).
+    lia.
+Qed.
+
+Definition rust_state_from_view (view : RustStateView) : RustState.
+Proof.
+  refine
+    {| rust_pc := rust_view_pc view;
+       rust_stack :=
+         {| rust_stack_values := rust_view_active_stack view;
+            rust_stack_bounded := _ |};
+       rust_memory := rust_view_memory_data view;
+       rust_status := rust_view_status view |}.
+  unfold rust_view_active_stack.
+  rewrite List.length_rev.
+  pose proof (rust_length_firstn_le RustWord
+    (rust_view_stack_depth view)
+    (Vector.to_list (rust_view_stack_data view))) as Hprefix.
+  pose proof (rust_view_stack_depth_bounded view) as Hdepth.
+  unfold RUST_STACK_CAPACITY in *.
+  lia.
+Defined.
+
 Inductive RustInstruction : Type :=
 | RustCONST (value : RustWord)
 | RustADD

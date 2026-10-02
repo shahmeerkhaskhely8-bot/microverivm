@@ -9,6 +9,12 @@
 /coq/*.aux
 /coq/*.log
 /coq/*.exit
+/coq/**/*.vo
+/coq/**/*.vos
+/coq/**/*.vok
+/coq/**/*.glob
+/coq/**/*.aux
+/coq/**/*.log
 /coq/build-check/
 /coq/compile.status
 /coq/compile-status.log

@@ -170,6 +170,21 @@ Proof.
       exact Hstate_corr.
 Qed.
 
+Theorem rust_view_model_step_correspondence :
+  forall rust_program rocq_program view rocq_state,
+    rust_program_corresponds rust_program rocq_program ->
+    rust_view_corresponds view rocq_state ->
+    rust_result_corresponds
+      (rust_step_model rust_program (rust_state_from_view view))
+      (coq_step rocq_program rocq_state).
+Proof.
+  intros rust_program rocq_program view rocq_state Hprogram Hview.
+  apply rust_step_correspondence.
+  - exact Hprogram.
+  - apply (proj1 (rust_view_corresponds_iff_projected_state view rocq_state)).
+    exact Hview.
+Qed.
+
 Theorem coq_step_reflects_rust :
   forall rust_program rocq_program rust_state rocq_state rocq_result,
     rust_program_corresponds rust_program rocq_program ->
@@ -389,4 +404,3 @@ Proof.
   - exact (safe_trace_is_multi_step program start finish Htrace).
   - exact (safe_trace_endpoint_safe program start finish Htrace).
 Qed.
-

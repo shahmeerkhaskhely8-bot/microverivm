@@ -12,6 +12,19 @@ pub enum Status {
     Halted,
 }
 
+/// Borrowed, allocation-free observation of a machine state.
+///
+/// `stack_data[..stack_depth]` is the active stack storage in bottom-to-top
+/// order; `memory_data` exposes the complete fixed-size memory.
+#[cfg(test)]
+pub(crate) struct StateView<'a> {
+    pub(crate) pc: u32,
+    pub(crate) stack_data: &'a [u32; crate::constants::STACK_SIZE],
+    pub(crate) stack_depth: usize,
+    pub(crate) memory_data: &'a [u32; crate::constants::MEMORY_SIZE],
+    pub(crate) status: Status,
+}
+
 /// Complete MicroVeriVM machine state without execution logic.
 pub struct State {
     pc: u32,
@@ -69,6 +82,17 @@ impl State {
     /// Returns a mutable reference to the machine status.
     pub const fn status_mut(&mut self) -> &mut Status {
         &mut self.status
+    }
+
+    #[cfg(test)]
+    pub(crate) const fn view(&self) -> StateView<'_> {
+        StateView {
+            pc: self.pc,
+            stack_data: self.stack.storage(),
+            stack_depth: self.stack.len(),
+            memory_data: self.memory.storage(),
+            status: self.status,
+        }
     }
 }
 
