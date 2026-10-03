@@ -1,6 +1,6 @@
 param(
     [string]$Compiler = 'coqc',
-    [int]$TimeoutSeconds = 180
+    [int]$TimeoutSeconds = 600
 )
 
 $ErrorActionPreference = 'Stop'

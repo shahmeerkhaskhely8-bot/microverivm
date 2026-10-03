@@ -1,183 +1,48 @@
-# MicroVeriVM — Phase 14 Final Project Summary
+# MicroVeriVM Repository Verification Snapshot
 
-**Review date:** September 24, 2026  
-**Review scope:** Phases 0–13  
-**Phase 14 status:** **PARTIAL / NOT FULLY VERIFIED**
+**Snapshot date:** October 3, 2026
+**Scope:** Rust implementation, 30 configured Coq modules, local scripts, and GitHub Actions workflow definitions.
 
-## Executive summary
+## Project structure
 
-The repository contains the intended MicroVeriVM project layers:
+MicroVeriVM contains two distinct machine efforts:
 
-- A dependency-free Rust baseline using `#![no_std]` and
-  `#![forbid(unsafe_code)]`.
-- Fixed-capacity stack and memory components.
-- A ten-instruction machine and single-step Rust executor.
-- Coq syntax, relational semantics, proof scripts, equivalence claims,
-  multi-step soundness definitions, and extraction configuration.
-- A Rust integration harness covering representative end-to-end execution.
+1. A ten-instruction bounded stack VM implemented in `rust/src/`, with a corresponding Rust-shaped mathematical model and Coq correspondence development.
+2. A separate RV32I formal model under `coq/RiscV/`, covering a named instruction subset, state and memory invariants, bounded execution, traps, privileged state, interrupts, retirement/PC event traces, and application integration.
 
-The project is **structurally complete through Phase 13**, but it cannot be
-classified as a fully verified high-assurance artifact from the available
-repository evidence. In particular, final Coq compilation and OCaml extraction
-were not confirmed in this environment, and the current Coq semantics is an
-inductive `Prop` relation rather than an extracted executable interpreter.
+The RV32I model receives word-sized text and data segments. ELF parsing, byte-to-word loading, and a proof that an external loader supplies a correct image are outside the model. The RV32I semantics is not claimed to refine the Rust stack-machine implementation.
 
-## Phase review
+## Coq development
 
-| Phase | Artifact | Review status |
-| --- | --- | --- |
-| 0 | Repository scaffold, Cargo manifest, Makefile, directories, no-std baseline | Implemented |
-| 1 | `rust/src/constants.rs`, `rust/src/error.rs` | Implemented |
-| 2 | `rust/src/instruction.rs` | Implemented |
-| 3 | `rust/src/stack.rs` | Implemented |
-| 4 | `rust/src/memory.rs` | Implemented |
-| 5 | `rust/src/state.rs` | Implemented |
-| 6 | `rust/src/execute.rs` | Implemented |
-| 7 | `coq/Syntax.v` | Implemented; compilation not confirmed |
-| 8 | `coq/Semantics.v` | Implemented; compilation not confirmed |
-| 9 | `coq/Proofs.v` | Implemented; proof compilation not confirmed |
-| 10 | `coq/Equivalence.v` | Implemented; proof compilation not confirmed |
-| 11 | `coq/Soundness.v` | Implemented; proof compilation not confirmed |
-| 12 | `coq/Extraction.v` | Configured; extraction not confirmed |
-| 13 | `tests/end_to_end.rs`, `docs/phase-13.md` | Implemented; command completion not confirmed |
-| 14 | This final review and summary | Complete with limitations recorded |
+The `_CoqProject` file and verification gate configure 30 Coq modules. This includes 16 modules under `coq/RiscV/`, from `Word.v` and `RegisterFile.v` through `ApplicationExecution.v`, `BisimulationRefinement.v`, and `SystemInvariants.v`, as well as the legacy stack-machine model, bridge, and extraction modules.
 
-## Rust baseline findings
+The RV32I application layer composes ordinary execution, trap-aware execution, and PC/event-tracked execution. Its theorems establish their respective safety invariants, bounded trace witnesses, event-count bounds, and equal-length trace determinism. The `BisimulationRefinement.v` results concern the Rust-shaped stack model and its separate Rocq semantics: they prove step and successful-trace correspondence in both directions under the stated relation. They do not prove refinement from the Rust source or RV32I-to-stack-machine equivalence.
 
-The Rust library exposes the expected modules:
+The local gate scans Coq sources for `Admitted`, `admit`, `Axiom`, and `Abort`, sequentially compiles the configured modules, and runs `coqchk`. In this snapshot, all 30 modules compiled and `coqchk` validated the configured module list; the placeholder scan returned no matches.
 
-- `constants`
-- `error`
-- `instruction`
-- `stack`
-- `memory`
-- `state`
-- `execute`
+## Rust implementation and quality gates
 
-The implementation is dependency-free and retains the requested crate-level
-constraints. The machine uses fixed arrays for stack and memory, explicit stack
-depth, checked memory access, checked traps, and no heap-based VM state.
-ADD, SUB, and program-counter advancement use 32-bit wrapping arithmetic.
+The Rust library is `no_std`, forbids unsafe code, and models a 256-word stack and 1024-word memory with fixed-size storage. It implements `CONST`, `ADD`, `SUB`, `DUP`, `DROP`, `LOAD`, `STORE`, `JMP`, `JZ`, and `HALT`. Arithmetic and sequential PC advancement use wrapping 32-bit operations.
 
-The Phase 13 harness exercises all ten instructions across its test cases,
-including arithmetic wrapping, branching, memory operations, traps, invalid
-program counters, halted-state behavior, and `u32::MAX` arithmetic and PC
-wraparound boundaries.
-
-## Trap discipline
-
-Existing traps cover stack bounds, memory bounds, and invalid program counters.
-**Future Trap Types:** any future partial instruction, such as division, must
-define its own named trap and classify the behavior as `PROVEN`, `TESTED`, or
-`OUT-OF-SCOPE` before implementation is treated as complete.
-
-## Coq findings
-
-The Coq layer contains the intended formal categories:
-
-- `Syntax.v`: instructions, words, bounded stack/memory shapes, status, and
-  machine state.
-- `Semantics.v`: inductive single-step relation and helper relations for stack,
-  memory, PC advancement, errors, and modular arithmetic.
-- `Proofs.v`: primitive safety, progress witnesses, and selected determinism
-  properties.
-- `RustModel.v`: an independent Rust-shaped mathematical data model with
-  bounded words, fixed-capacity storage, and post-state failures.
-- `Invariants.v`: a valid-state predicate and structural preservation proofs
-  for stack, memory, and PC representation.
-- `Correspondence.v`: separate Rust/Rocq representations, explicit state and
-  instruction relations, independent evaluators, and instruction-level result
-  correspondence including post-error states.
-- `Equivalence.v`: stack and memory safety invariants for the legacy Coq model;
-  it makes no cross-language simulation claim.
-- `Soundness.v`: successful multi-step traces and Coq trace safety properties.
-- `Extraction.v`: OCaml extraction setup.
-
-The independent Rust model's word type is bounded to the Rust `u32` domain and
-its arithmetic is modeled modulo $2^{32}$. It proves the requested addition
-and subtraction boundary cases, bounded stack operations and traps, and
-memory-address validity. The dependency chain to compile is:
+The following gates passed in the recorded Windows environment:
 
 ```text
-coq/RustModel.v
-coq/Invariants.v
-coq/Correspondence.v
-coq/Syntax.v
-coq/Semantics.v 
-coq/Proofs.v
-coq/Equivalence.v
-coq/Soundness.v
-coq/Extraction.v
+cargo fmt --all -- --check
+cargo check --locked --all-targets
+cargo clippy --locked --all-targets -- -D warnings
+cargo test --locked --all-targets
 ```
 
-Instruction targets are numeric words in the VM. Symbolic label resolution is
-performed strictly at compile time by an external assembler pass, before the
-VM runs. That assembler pass is out of scope for formal verification v1; the
-Coq step relation models numeric PC targets only.
+The unit and integration suites reported 12 passing tests and no failures. `scripts/phase0-gate.ps1` also passed.
 
-Additionally, standard Coq extraction erases definitions living in `Prop`.
-Consequently, the current extraction configuration can extract data and
-computational arithmetic, but it does not by itself produce an executable
-interpreter from the inductive `step` relation or the proof relations.
+## Scripts and CI
 
-## Definition of Done
+All four `scripts/*.ps1` files passed PowerShell parser validation. Both `scripts/run-pipeline.ps1` and `scripts/coq-compile-all.ps1` completed successfully. Static checks confirmed that the GitHub workflows reference the configured Coq modules and align Rust commands with the local quality gates.
 
-The independent evaluators and instruction-level correspondence theorems in
-`Correspondence.v` compare separate Rust-shaped and Rocq states, including
-success and post-error states. They prove consistency between the two Coq
-specifications; they do not mechanically derive or execute the compiled Rust
-implementation. A verified connection from actual Rust transitions to the
-Rust-shaped evaluator remains future work. Full behavioral equivalence also
-requires an appropriate total and injective representation relation and
-proofs in both directions.
+The available environment did not include `actionlint` or a YAML parser; therefore, workflow validation was limited to source inspection and static command/module consistency checks, not a dedicated workflow linter or a live GitHub Actions run. `make` was also unavailable, so the Makefile targets were inspected but not executed.
 
-V1 also requires the Coq dependency chain to compile with no diagnostics, the
-u32 boundary proofs to discharge, and the Rust check and end-to-end tests to
-pass. Symbolic label resolution remains the compile-time external assembler's
-responsibility, outside the v1 formal verification boundary.
+## Scope and assurance limits
 
-## Validation status
+`coqchk` validates compiled Coq proof objects and their dependencies. It does not verify the Coq compiler or kernel implementation, the Rust compiler, the Rust source-to-model connection, binary loading, or external execution platforms. Rust build, lint, and test results are independent evidence and are not part of the Coq proof.
 
-Requested validation targets were reviewed:
-
-```text
-cargo fmt --check
-cargo check --locked
-cargo test --locked3  
-```
-
-Verified in this environment: `cargo fmt --check`,
-`cargo check --locked --tests`, and `scripts/check-coq.ps1` pass.
-`cargo test --locked` builds the
-test binary but could not launch it because Windows reported
-`STATUS_DLL_NOT_FOUND`; the behavioral Rust test result therefore remains
-unverified here. The Coq gate compiles every formal file in dependency order
-with empty diagnostic logs and confirms both extraction artifacts exist.
-
-## High-assurance conclusion
-
-**Implementation completeness:** substantial and structurally present through
-Phase 13.
-
-**Rust safety posture:** aligned with the requested no-std, no-unsafe, bounded,
-zero-heap design.
-
-**Formal verification posture:** not release-qualified from this environment;
-the Coq dependency chain and extraction output require compilation and review
-with an installed, pinned Coq/OCaml toolchain.
-
-## Recommended release gate
-
-Before calling MicroVeriVM a complete high-assurance artifact:
-
-1. Install and pin the supported Coq and OCaml versions.
-2. Compile every Coq file in dependency order with `coqc`.
-3. Run the extraction command and verify that `microverivm.ml` is generated.
-4. Add an executable computational Coq semantics, or a certified refinement
-   from the relational semantics to an executable function, if an extracted VM
-   interpreter is required.
-5. Run the Rust formatting, check, and integration test commands and record
-   their final exit codes in CI.
-6. Define the Rust-model transition relation and prove its refinement against
-  the exact Rust executor behavior before making cross-language equivalence
-  claims.
+This snapshot records successful repository checks, not a claim of absolute correctness or complete RV32I conformance. The formal results are limited to their stated models, premises, and supported instruction subset.

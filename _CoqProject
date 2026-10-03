@@ -1,5 +1,19 @@
 -Q coq MicroVeriVM
 coq/RustModel.v
+coq/RiscV/Word.v
+coq/RiscV/RegisterFile.v
+coq/RiscV/Machine.v
+coq/RiscV/Instruction.v
+coq/RiscV/Decoder.v
+coq/RiscV/Semantics.v
+coq/RiscV/MemorySafety.v
+coq/RiscV/Execution.v
+coq/RiscV/TrapHandling.v
+coq/RiscV/SystemIntegration.v
+coq/RiscV/PrivilegedCSR.v
+coq/RiscV/Interrupts.v
+coq/RiscV/RetirementTrace.v
+coq/RiscV/ApplicationExecution.v
 coq/Invariants.v
 coq/Correspondence.v
 coq/Syntax.v
@@ -13,3 +27,5 @@ coq/Bridge/RustLite.v
 coq/Bridge/Simulation.v
 coq/Bridge/TraceEquiv.v
 coq/Extraction.v
+coq/RiscV/BisimulationRefinement.v
+coq/RiscV/SystemInvariants.v

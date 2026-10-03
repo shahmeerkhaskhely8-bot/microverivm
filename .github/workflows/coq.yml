@@ -17,6 +17,13 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Reject incomplete proof placeholders
+        run: |
+          if grep -R -nE '\b(Admitted|admit|Axiom|Abort)\b' coq --include='*.v'; then
+            echo "Coq proof placeholders are not allowed."
+            exit 1
+          fi
+
       - name: Install Rocq toolchain
         run: |
           sudo apt-get update
@@ -35,6 +42,20 @@ jobs:
         run: |
           coqchk -Q coq MicroVeriVM \
             MicroVeriVM.RustModel \
+            MicroVeriVM.RiscV.Word \
+            MicroVeriVM.RiscV.RegisterFile \
+            MicroVeriVM.RiscV.Machine \
+            MicroVeriVM.RiscV.Instruction \
+            MicroVeriVM.RiscV.Decoder \
+            MicroVeriVM.RiscV.Semantics \
+            MicroVeriVM.RiscV.MemorySafety \
+            MicroVeriVM.RiscV.Execution \
+            MicroVeriVM.RiscV.TrapHandling \
+            MicroVeriVM.RiscV.SystemIntegration \
+            MicroVeriVM.RiscV.PrivilegedCSR \
+            MicroVeriVM.RiscV.Interrupts \
+            MicroVeriVM.RiscV.RetirementTrace \
+            MicroVeriVM.RiscV.ApplicationExecution \
             MicroVeriVM.Invariants \
             MicroVeriVM.Correspondence \
             MicroVeriVM.Syntax \
@@ -47,4 +68,6 @@ jobs:
             MicroVeriVM.Bridge.RustLite \
             MicroVeriVM.Bridge.Simulation \
             MicroVeriVM.Bridge.TraceEquiv \
-            MicroVeriVM.Extraction
+            MicroVeriVM.Extraction \
+            MicroVeriVM.RiscV.BisimulationRefinement \
+            MicroVeriVM.RiscV.SystemInvariants

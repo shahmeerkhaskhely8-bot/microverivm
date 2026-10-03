@@ -2,6 +2,8 @@
 
 This guide describes MicroVeriVM as a bounded virtual machine and as a formal-methods case study. It follows the path from the target instruction semantics to the RustLite evaluator and explains exactly what the current proofs establish.
 
+> **Migration note:** `coq/RiscV/` contains a separate RV32I model with architectural foundations, a named-subset AST and decoder, operational semantics, memory safety, multi-step execution, binary-image application integration, trap handling, privileged-state and interrupt models, retirement/event traces, application execution, and top-level invariants. `BisimulationRefinement.v` proves successful-trace correspondence between the legacy Rust-shaped stack model and its separate Rocq stack semantics; it does not relate RV32I execution to the stack VM or prove the Rust source. The application boundary consumes word-sized text/data segments supplied by an external loader; ELF parsing and byte-level loading remain outside the formal model. Detailed guides are available for [Phases 1–7](rv32i-phase1.md).
+
 ## At a glance
 
 MicroVeriVM consists of a separate safe Rust implementation and a Rocq formal development. Its core machine has 32-bit words, a 256-word stack, 1024 words of fixed memory, a numeric program counter, and a running/halted status. Both arithmetic and ordinary PC advancement wrap modulo 2^32. Stack and memory bounds are explicit; invalid operations produce named errors in Rust and corresponding outcomes in the formal model.
@@ -48,10 +50,11 @@ The project follows a zero-placeholder discipline: no project Coq source should 
 
 ### What this does and does not guarantee
 
-The formal result is an unconditional **forward simulation theorem for successful target traces**: after the target trace and initial state relation are supplied, no separate per-step simulation theorem is assumed. The theorem does not prove:
+The target-to-RustLite result is an **unconditional forward simulation theorem for successful target traces**: after the target trace and initial state relation are supplied, no separate per-step simulation theorem is assumed. Separately, the Rust-shaped Coq model has bidirectional successful-trace correspondence with its Rocq semantics. Neither theorem proves:
 
-- full behavioral equivalence or bisimulation (which would need additional correspondence properties, including a suitable total/injective representation relation);
-- equivalence of target failure traces with RustLite stuck states;
+- full behavioral equivalence between the executable Rust source and a Coq model;
+- reverse simulation or equivalence of failure traces for the target-to-RustLite bridge;
+- refinement between the separate RV32I machine and the legacy stack VM;
 - that the separately compiled Rust source is mechanically refined by the Coq model;
 - correctness of a future assembler, compiler, or external system.
 
@@ -197,10 +200,10 @@ Install Rocq Platform 9.1 or compatible tools, add the Rocq `bin` directory to `
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\check-coq.ps1
 ```
 
-The script compiles the 14 configured modules sequentially under the `MicroVeriVM` logical prefix, checks compiler diagnostics and extracted artifacts, and runs `coqchk` over the module chain. Its expected success message is:
+The script compiles all 30 configured modules sequentially under the `MicroVeriVM` logical prefix, rejects proof-placeholder tokens, checks compiler diagnostics and extracted artifacts, and runs `coqchk` over the module list. Its expected success message is:
 
 ```text
-PASS: all fourteen files compiled sequentially; coqchk validated all fourteen modules
+PASS: all thirty files compiled sequentially; coqchk validated all thirty modules
 ```
 
 Compilation logs and the status record are stored in `coq/build-check/`.
@@ -210,6 +213,14 @@ For a direct kernel-check invocation after successful compilation:
 ```powershell
 coqchk -Q coq MicroVeriVM `
   MicroVeriVM.RustModel `
+  MicroVeriVM.RiscV.Word `
+  MicroVeriVM.RiscV.RegisterFile `
+  MicroVeriVM.RiscV.Machine `
+  MicroVeriVM.RiscV.Instruction `
+  MicroVeriVM.RiscV.Decoder `
+  MicroVeriVM.RiscV.Semantics `
+  MicroVeriVM.RiscV.MemorySafety `
+  MicroVeriVM.RiscV.Execution `
   MicroVeriVM.Invariants `
   MicroVeriVM.Correspondence `
   MicroVeriVM.Syntax `
@@ -245,15 +256,26 @@ Both theorems should report `Closed under the global context`.
 |-- rust/src/                   no_std Rust library runtime
 |-- tests/                      Rust integration tests
 |-- coq/
-|   |-- RustModel.v             bounded words, stack, memory, and state
+|   |-- RiscV/                  RV32I foundations, decoder, semantics, and traces
+|   |   |-- Word.v              32-bit words and modular arithmetic
+|   |   |-- RegisterFile.v      x0 plus 31 writable registers
+|   |   |-- Machine.v           aligned PC and RV32I state
+|   |   |-- Instruction.v       typed named-subset instruction AST
+|   |   |-- Decoder.v           bit extraction, decoder, and proofs
+|   |   |-- Semantics.v         RV32I operational semantics
+|   |   |-- MemorySafety.v      bounds, non-interference, and safety proofs
+|   |   |-- Execution.v         finite multi-step execution and trace proofs
+|   |   |-- TrapHandling.v      exception classification, redirection, and trace proofs
+|   |   `-- SystemIntegration.v binary image start, bounded run, and safety proofs
+|   |-- RustModel.v             legacy stack VM words and state
 |   |-- Syntax.v / Semantics.v  foundational source language
 |   |-- Proofs.v / Soundness.v  model lemmas and soundness results
 |   |-- CanonicalAST.v          canonical instruction representation
-|   |-- TargetAST.v             target VM and program-step semantics
+|   |-- TargetAST.v             legacy target VM semantics
 |   |-- Extraction.v            extraction entry point
 |   `-- Bridge/
 |       |-- RustLite.v          RustLite values, statements, and evaluator
-|       |-- Simulation.v        representation and per-step simulation
+|       |-- Simulation.v        legacy representation and per-step simulation
 |       `-- TraceEquiv.v        successful-trace forward simulation
 |-- scripts/                    PowerShell gates
 |-- docs/                       architecture and project notes

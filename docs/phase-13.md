@@ -1,4 +1,4 @@
-# MicroVeriVM — Phase 13 Verification Summary
+# MicroVeriVM — Phase 13 Integration Test Summary
 
 Phase 13 adds an end-to-end Rust integration harness at
 `tests/end_to_end.rs`. The harness drives the public `execute::step` API with
@@ -24,17 +24,21 @@ The integration harness validates:
 Run from the repository root:
 
 ```text
-cargo fmt --check
-cargo check
-cargo test
+cargo fmt --all -- --check
+cargo check --locked --all-targets
+cargo test --locked --all-targets
 ```
 
-The integration harness is the Phase 13 end-to-end executable check. Coq
-artifacts remain the formal specification/proof boundary. The current Phase 12
-extraction setup emits executable syntax/state/arithmetic definitions; the
-inductive `step`, trace, equivalence, and proof relations live in `Prop` and
-are therefore erased by standard Coq extraction rather than emitted as an
-unchecked interpreter.
+The integration harness is an executable test of the Rust stack VM. It is
+independent of the Coq RV32I model and does not establish a refinement between
+the Rust implementation and either formal machine. Standard Coq extraction
+erases proof propositions; the existence of `coq/Extraction.v` is not by
+itself evidence of an extracted, verified interpreter.
+
+For the repository's current combined Rust and Coq verification status, see
+the [verification snapshot](final-project-summary.md). The current gates use
+locked dependencies and include all Cargo targets and all 30 configured Coq
+modules.
 
 ## Scope
 

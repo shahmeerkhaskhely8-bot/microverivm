@@ -13,7 +13,7 @@ machine.
 - Coq, tests, scripts, and documentation directories are established for later
   phases.
 
-## Gate7777
+## Gate
 
 Run `make phase0` on systems with Make, or run
 `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/phase0-gate.ps1`

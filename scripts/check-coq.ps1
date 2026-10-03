@@ -1,6 +1,6 @@
 param(
     [string]$Compiler = 'coqc',
-    [int]$TimeoutSeconds = 180
+    [int]$TimeoutSeconds = 600
 )
 
 $ErrorActionPreference = 'Stop'
@@ -38,7 +38,14 @@ try {
     $compilerDirectory = Split-Path -Parent $compilerPath
     $env:PATH = "$compilerDirectory;$env:PATH"
     Add-Content $statusPath "compiler=$compilerPath"
-    $files = @('RustModel', 'Invariants', 'Correspondence', 'Syntax', 'Semantics', 'Proofs', 'Equivalence', 'Soundness', 'CanonicalAST', 'TargetAST', 'Bridge/RustLite', 'Bridge/Simulation', 'Bridge/TraceEquiv', 'Extraction')
+    $sourceFiles = Get-ChildItem -Path (Join-Path $root 'coq') -Filter '*.v' -Recurse
+    $placeholderMatches = Select-String -Path $sourceFiles.FullName `
+        -Pattern '\b(Admitted|admit|Axiom|Abort)\b'
+    if ($placeholderMatches) {
+        throw "Proof placeholders found: $($placeholderMatches -join '; ')"
+    }
+    Add-Content $statusPath 'PASS: no Admitted/admit/Axiom/Abort tokens found in Coq sources'
+    $files = @('RustModel', 'RiscV/Word', 'RiscV/RegisterFile', 'RiscV/Machine', 'RiscV/Instruction', 'RiscV/Decoder', 'RiscV/Semantics', 'RiscV/MemorySafety', 'RiscV/Execution', 'RiscV/TrapHandling', 'RiscV/SystemIntegration', 'RiscV/PrivilegedCSR', 'RiscV/Interrupts', 'RiscV/RetirementTrace', 'RiscV/ApplicationExecution', 'Invariants', 'Correspondence', 'Syntax', 'Semantics', 'Proofs', 'Equivalence', 'Soundness', 'CanonicalAST', 'TargetAST', 'Bridge/RustLite', 'Bridge/Simulation', 'Bridge/TraceEquiv', 'Extraction', 'RiscV/BisimulationRefinement', 'RiscV/SystemInvariants')
     foreach ($name in $files) {
         $logName = $name -replace '[/\\]', '-'
         $stdout = Join-Path $logDir "$logName.stdout.log"
@@ -80,6 +87,20 @@ try {
     $checkerStderr = Join-Path $logDir 'coqchk.stderr.log'
     $checkerModules = @(
         'MicroVeriVM.RustModel',
+        'MicroVeriVM.RiscV.Word',
+        'MicroVeriVM.RiscV.RegisterFile',
+        'MicroVeriVM.RiscV.Machine',
+        'MicroVeriVM.RiscV.Instruction',
+        'MicroVeriVM.RiscV.Decoder',
+        'MicroVeriVM.RiscV.Semantics',
+        'MicroVeriVM.RiscV.MemorySafety',
+        'MicroVeriVM.RiscV.Execution',
+        'MicroVeriVM.RiscV.TrapHandling',
+        'MicroVeriVM.RiscV.SystemIntegration',
+        'MicroVeriVM.RiscV.PrivilegedCSR',
+        'MicroVeriVM.RiscV.Interrupts',
+        'MicroVeriVM.RiscV.RetirementTrace',
+        'MicroVeriVM.RiscV.ApplicationExecution',
         'MicroVeriVM.Invariants',
         'MicroVeriVM.Correspondence',
         'MicroVeriVM.Syntax',
@@ -92,7 +113,9 @@ try {
         'MicroVeriVM.Bridge.RustLite',
         'MicroVeriVM.Bridge.Simulation',
         'MicroVeriVM.Bridge.TraceEquiv',
-        'MicroVeriVM.Extraction'
+        'MicroVeriVM.Extraction',
+        'MicroVeriVM.RiscV.BisimulationRefinement',
+        'MicroVeriVM.RiscV.SystemInvariants'
     )
     $checker = Start-Process -FilePath $checkerPath -WorkingDirectory $root `
         -ArgumentList (@('-Q', 'coq', 'MicroVeriVM') + $checkerModules) `
@@ -112,7 +135,7 @@ try {
     if (-not $checkerSucceeded) {
         throw 'coqchk exited successfully without reporting that modules were checked'
     }
-    Add-Content $statusPath 'PASS: all fourteen files compiled sequentially; coqchk validated all fourteen modules'
+    Add-Content $statusPath 'PASS: all thirty files compiled sequentially; coqchk validated all thirty modules'
     Get-Content $statusPath
     exit 0
 } catch {

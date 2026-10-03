@@ -2,9 +2,9 @@
 
 ## Abstract
 
-MicroVeriVM is a bounded, deterministic stack virtual machine developed alongside a safe `no_std` Rust implementation and a machine-checked Rocq (Coq) semantics. The formal development defines a ten-instruction target machine, a RustLite statement language, a representation relation between target states and RustLite environments, and proofs connecting instruction fetch and execution. Its principal result is a forward simulation: for every successful target step from related states, there exists a fuel-bounded RustLite execution yielding a related next state; induction lifts this result to successful target traces. The theorems are closed under the global context and the compiled modules are independently checked by `coqchk`.
+MicroVeriVM contains a bounded, deterministic stack virtual machine implemented in safe `no_std` Rust, a Coq formal model of that stack machine, and a separate RV32I formalization. The legacy stack-machine proof development defines a ten-instruction target machine, a RustLite statement language, a representation relation between target states and RustLite environments, and proofs connecting instruction fetch and execution. Its principal result is forward simulation for successful target steps and traces. A separate Rust-shaped Coq model has step- and successful-trace correspondence in both directions with its Rocq semantics. The RV32I development defines a named instruction subset, operational semantics, safety invariants, trap and interrupt layers, trace tracking, and application-level composition. The compiled Coq modules are checked by `coqchk`.
 
-The result is deliberately narrower than end-to-end verification of compiled Rust. The bridge proves correspondence between formal Coq definitions; the Rust crate is separately checked, linted, and tested, but no mechanized theorem currently connects Rust source or machine code to the Coq target. Nor does the trace theorem establish reverse simulation, failure-trace correspondence, or bisimulation. This paper presents the model, proof architecture, engineering constraints, validation evidence, and these boundaries. The contribution is a compact, inspectable example of instruction-level proof composition and trace lifting for a bounded machine, not a claim that formal verification eliminates discrepancies across components that are outside the theorem.
+These results are deliberately narrower than end-to-end verification of compiled Rust. The proofs relate formal Coq definitions; the Rust crate is separately checked, linted, and tested, but no mechanized theorem connects Rust source or machine code to either Coq machine. The target-to-RustLite trace result is forward-only and covers successful traces. The Rust-shaped model correspondence is bidirectional for its successful step/results and traces, but it is not an RV32I-to-stack-VM refinement or a proof of failure-trace equivalence for the target/RustLite bridge. This paper presents the model, proof architecture, engineering constraints, validation evidence, and these boundaries; it does not claim elimination of discrepancies outside the formal statements.
 
 **Keywords:** operational semantics, forward simulation, Rocq, Coq, virtual machine, bounded execution, Rust, proof kernel
 
@@ -12,17 +12,18 @@ The result is deliberately narrower than end-to-end verification of compiled Rus
 
 Virtual machines routinely sit at a consequential boundary: they interpret compact instruction streams while updating stacks, memory, and control state. Errors in arithmetic, bounds checks, instruction fetch, or branch behavior can violate assumptions made by every program above them. Traditional testing is valuable, but finite tests cannot alone establish a universal property over all machine states and instruction sequences. Formal semantics and machine-checked proofs offer a complementary approach: define the machine mathematically, state the desired correspondence, and have a trusted proof kernel check a proof term.
 
-MicroVeriVM explores this approach at deliberately modest scale. It has ten instructions, 32-bit words, a stack bounded to 256 words, and fixed memory of 1024 words. Its control flow uses numeric program-counter (PC) targets. Addition, subtraction, and ordinary PC advancement have modulo-2^32 behavior. Stack and memory accesses are bounded, and failures are represented explicitly.
+MicroVeriVM explores this approach at deliberately modest scale. Its legacy stack VM has ten instructions, 32-bit words, a stack bounded to 256 words, and fixed memory of 1024 words. Its control flow uses numeric program-counter (PC) targets. Addition, subtraction, and ordinary PC advancement have modulo-2^32 behavior. Stack and memory accesses are bounded, and failures are represented explicitly. A separate RV32I model defines 32-bit words, the x0-safe register file, aligned-PC machine state, a typed decoder for a named base-instruction subset, and a small-step execution function with bounded word memory. It remains separate from the stack-VM proofs.
 
 The work is motivated by high-assurance systems such as seL4, where formal verification has been applied to an operating-system kernel and its refinement relationships [1]. The comparison is one of method, not of scope or assurance level. seL4 addresses a vastly larger software artifact and establishes refinement properties between layers of a kernel implementation. MicroVeriVM instead isolates a small machine and proves a forward-simulation result between two formal Coq models. Its separate Rust implementation is subject to compiler checks and tests, but is not presently included in the mechanized refinement chain.
 
-This paper makes three claims:
+This paper makes four claims:
 
 1. **An explicit bounded target semantics.** MicroVeriVM defines the instruction set and relevant boundary behavior over typed machine state.
-2. **Compositional formal correspondence.** Instruction-level lemmas, state-update properties, and a PC fetch-dispatch theorem compose into a successful-step forward simulation.
-3. **Trace lifting with a checked proof object.** The successful-step result supports an inductive successful-trace simulation theorem; the project gate compiles the proof graph and invokes `coqchk`.
+2. **Compositional formal correspondence.** Instruction-level lemmas, state-update properties, and a PC fetch-dispatch theorem compose into a successful-step forward simulation from the target VM to RustLite. Separately, a Rust-shaped state/program relation supports model-level step and successful-trace correspondence in both directions.
+3. **RV32I invariant composition.** The RV32I application layer composes ordinary, trap-aware, and PC-event-tracked bounded executions, with separate safety and trace theorems.
+4. **Kernel-checked proof objects.** The project gate compiles 30 configured Coq modules and invokes `coqchk`.
 
-We also make explicit what is not claimed: no assembler verification, no theorem about compiled Rust, no reverse simulation, and no equivalence result for failing traces.
+We also make explicit what is not claimed: no assembler verification, no theorem about compiled Rust, no reverse simulation or failure-trace equivalence for the target-to-RustLite bridge, and no refinement between the RV32I model and the stack VM.
 
 ## 2. Machine model
 
@@ -165,7 +166,7 @@ The project maintains a zero-placeholder policy for Coq source: theorem proofs s
 
 ### 4.3 `coqc` and `coqchk`
 
-The project gate [`check-coq.ps1`](../scripts/check-coq.ps1) compiles 14 configured modules in dependency order, checks for compiler diagnostics and required extraction artifacts, and invokes `coqchk` on the resulting modules. The gate's successful completion confirms that the compiled proof terms and their dependencies were accepted by the Coq kernel checker.
+The project gate [`check-coq.ps1`](../scripts/check-coq.ps1) scans the Coq sources for forbidden proof-placeholder tokens, compiles 30 configured modules in dependency order, checks for compiler diagnostics and required extraction artifacts, and invokes `coqchk` on the resulting module list. A successful run confirms that these compiled proof terms and dependencies were accepted by the installed Coq kernel checker.
 
 This is a strong and reproducible check of the formal development. It is not an independent proof of the Rust compiler, hardware, operating system, assembler, or the correspondence between the Rust source and the formal machine. Those remain outside the trusted formal chain presented here.
 
@@ -202,7 +203,7 @@ The authoritative formal gate is:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\check-coq.ps1
 ```
 
-The gate reports success only after the 14 configured modules compile and `coqchk` validates the module chain. To inspect the principal theorem assumptions interactively:
+The gate reports success only after all 30 configured modules compile and `coqchk` validates the listed module graph. The RV32I portion includes word/register/state foundations, instruction syntax and decoding, semantics, memory safety, execution, traps, system integration, privileged state, interrupts, retirement tracing, application execution, bisimulation/refinement results for the separate stack model, and top-level system invariants. These RV32I results are distinct from the legacy target-to-RustLite simulation theorem. To inspect the principal theorem assumptions interactively:
 
 ```coq
 Require Import MicroVeriVM.Bridge.TraceEquiv.
@@ -223,19 +224,20 @@ Compiler verification projects such as CompCert establish correctness results ab
 The current formal result has deliberate limits:
 
 1. **Rust correspondence:** A formal model of the Rust implementation, a verified extraction path, or a source-level refinement proof is needed to connect the executable crate to the Coq theorem.
-2. **Reverse direction:** Full behavioral equivalence would require additional results, including suitable totality and injectivity properties for the representation relation and a reverse simulation argument.
+2. **Behavioral equivalence:** The Rust-shaped Coq model has a bidirectional successful-trace correspondence with its Rocq semantics under the stated relation. Full behavioral equivalence with the executable Rust implementation, with failures, or between the RV32I and stack-VM models would require additional representation and implementation-refinement results; the existing bridge does not establish these claims.
 3. **Failure behavior:** The established trace theorem is for successful target steps. A future theorem could relate target failures to RustLite stuck outcomes while preserving precise partial-state behavior.
 4. **Toolchain and platform:** `coqchk` checks proof objects; it does not verify the compiler, kernel implementation, operating system, hardware, or build environment.
 5. **Assembler:** Label resolution and generated numeric targets are external to this formal scope.
 6. **Instruction growth:** New partial instructions must specify their failure ordering and named traps, and require matching semantics, simulations, and tests before being treated as verified.
+7. **RV32I scope:** The 16 modules under `coq/RiscV/` define foundations, a named-subset AST and decoder, execution and memory-safety results, finite traces, word-segment image integration, trap handling, a modeled privileged-state/CSR subset, interrupt arbitration, retirement/PC events, application safety composition, and top-level invariant results. The image interface accepts word-sized text/data segments; it does not parse ELF metadata or prove a byte-level loader. The full RV32I base ISA, a complete privileged architecture, platform-specific behavior, and a refinement from RV32I execution to the Rust stack VM remain outside the current development.
 
-Future work should prioritize a machine-checked connection to the Rust implementation, a reverse trace argument under a stronger representation invariant, and a treatment of error traces. Additional instructions or assembler support should be added only with the same explicit semantic and proof discipline.
+Future work should prioritize a machine-checked connection to the Rust implementation, reverse simulation and failure correspondence for the target-to-RustLite bridge, and treatment of error traces. Additional instructions or assembler support should be added only with the same explicit semantic and proof discipline.
 
 ## 9. Conclusion
 
 MicroVeriVM shows how to construct a compact forward-simulation proof for a bounded stack machine. The architecture separates target semantics, a formal execution language, state correspondence, PC-based fetch dispatch, and trace induction. Its closed Coq theorems and `coqchk` gate provide strong evidence for the specified formal relationship; Rust's safety constraints and validation provide a complementary implementation assurance process.
 
-The central scientific lesson is also a scope lesson: a kernel-checked theorem guarantees exactly what its definitions and premises state. Here, that is successful-trace forward simulation from the target Coq machine to RustLite, not end-to-end equivalence with compiled Rust. Making that boundary explicit is part of the project's verification result.
+The central scientific lesson is also a scope lesson: a kernel-checked theorem guarantees exactly what its definitions and premises state. For the legacy target-to-RustLite bridge, the established trace theorem is successful-trace forward simulation, not end-to-end equivalence with compiled Rust. The separate Rust-shaped model correspondence has its own bidirectional successful-trace result. Making those distinct boundaries explicit is part of the project's verification result.
 
 ## References
 

@@ -1,10 +1,12 @@
-# MicroVeriVM
+﻿# MicroVeriVM
 
 MicroVeriVM is a deterministic, bounded 32-bit stack virtual machine with a safe `no_std` Rust runtime and a machine-checked Rocq (Coq) semantics and forward-simulation proof.
 
+The repository also contains a separate RV32I formalization in `coq/RiscV/`. Its modules define a 32-bit word model, x0-safe register file, aligned-PC state, a typed instruction/decode contract for a named RV32I subset, small-step execution, memory-safety results, finite traces, binary-image integration, traps, privileged-state and interrupt models, retirement/PC event traces, application safety composition, and model-level refinement results. The image contract begins with word-sized text and data segments supplied by an external loader; ELF parsing and byte-level loading are outside the proof. The RV32I machine is not the Rust stack VM, and no equivalence between those architectures is claimed.
+
 It is intentionally small enough to inspect end to end: ten instructions, a 256-word stack, 1024 words of memory, explicit traps, numeric program-counter targets, and arithmetic defined modulo 2^32. The project is both a systems-engineering example and a practical teaching artifact for formal semantics and proof-assisted development.
 
-> **Verification scope:** The Coq development proves a forward simulation from successful steps of the `TargetAST.v` machine into the RustLite execution model, and lifts it to successful traces without taking a per-step simulation theorem as a hypothesis. `coqchk` validates the compiled Coq proof objects. This is not a mechanized proof of the separately maintained Rust source code, nor a proof of full behavioral equivalence or bisimulation. The Rust implementation is built, linted, and tested independently.
+> **Verification scope:** The legacy `TargetAST.v` to RustLite bridge proves forward simulation for successful steps and traces. A distinct Rust-shaped Coq model has bidirectional step and successful-trace correspondence with its Rocq semantics. Neither result proves the Rust source or machine code, relates the RV32I model to the stack VM, or establishes correspondence for all failure behaviors. `coqchk` validates the compiled Coq proof objects; Rust is built, linted, and tested independently.
 
 ## Highlights
 
@@ -13,7 +15,7 @@ It is intentionally small enough to inspect end to end: ten instructions, a 256-
 - **Explicit failure behavior:** Stack underflow/overflow, invalid memory addresses, and invalid program counters return named errors.
 - **Safe runtime:** The crate uses `#![no_std]` and `#![forbid(unsafe_code)]`; VM state does not use dynamic allocation.
 - **Closed bridge proofs:** The project-level Coq sources contain no `Admitted`, `admit`, `Axiom`, or `Abort` placeholders. The main step- and trace-simulation theorems report “Closed under the global context.”
-- **Kernel validation:** The Coq gate compiles 14 modules sequentially and checks them with `coqchk`.
+- **Kernel validation:** The Coq gate compiles all 30 configured modules sequentially and checks them with `coqchk`.
 
 ## Architecture
 
@@ -44,7 +46,11 @@ flowchart LR
     R --> T
 ```
 
-The verified trace result is a **forward simulation for traces whose target steps succeed**. It does not assert reverse simulation, failure-trace equivalence, or equivalence of every behavior of the Rust source. See [the architecture guide](docs/ARCHITECTURE.md) for proof boundaries and [the white paper](docs/WHITE-PAPER.md) for the formal model, proof methodology, and limitations.
+The target-to-RustLite trace result is a **forward simulation for traces whose target steps succeed**. It does not assert reverse simulation or failure-trace equivalence for that bridge. The separate Rust-shaped model correspondence does not verify executable Rust. See [the architecture guide](docs/ARCHITECTURE.md) for proof boundaries and [the white paper](docs/WHITE-PAPER.md) for the formal model, proof methodology, and limitations.
+
+## RV32I formalization
+
+The RV32I contract is developed independently of the legacy stack-machine correspondence in [`coq/RiscV/`](coq/RiscV/). The repository includes later modules for privileged state, interrupts, retirement/event traces, application execution, model-level stack-VM correspondence, and top-level system invariants. The detailed phase guides currently cover [Phase 1 foundations](docs/rv32i-phase1.md), [Phase 2 instruction decoding](docs/rv32i-phase2.md), [Phase 3 operational semantics](docs/rv32i-phase3.md), [Phase 4 memory safety](docs/rv32i-phase4.md), [Phase 5 multi-step execution](docs/rv32i-phase5.md), [Phase 6 system integration](docs/rv32i-phase6.md), and [Phase 7 trap handling](docs/rv32i-phase7.md).
 
 ## Instruction set
 
@@ -134,16 +140,30 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\check-coq.ps1
 Expected final line:
 
 ```text
-PASS: all fourteen files compiled sequentially; coqchk validated all fourteen modules
+PASS: all thirty files compiled sequentially; coqchk validated all thirty modules
 ```
 
-The gate writes detailed status and compiler logs under `coq/build-check/`. Its successful exit means each listed module compiled with no diagnostics, required extraction artifacts were present, and `coqchk` validated all 14 modules.
+The gate writes detailed status and compiler logs under `coq/build-check/`. Its successful exit means each of the 30 configured modules compiled with no diagnostics, required extraction artifacts were present, and `coqchk` validated all listed modules. A separate scan rejects `Admitted`, `admit`, `Axiom`, and `Abort` tokens in Coq source files.
 
 To invoke `coqchk` directly after the script has compiled the modules, ensure the Rocq `bin` directory is on `PATH` and run:
 
 ```powershell
 coqchk -Q coq MicroVeriVM `
   MicroVeriVM.RustModel `
+  MicroVeriVM.RiscV.Word `
+  MicroVeriVM.RiscV.RegisterFile `
+  MicroVeriVM.RiscV.Machine `
+  MicroVeriVM.RiscV.Instruction `
+  MicroVeriVM.RiscV.Decoder `
+  MicroVeriVM.RiscV.Semantics `
+  MicroVeriVM.RiscV.MemorySafety `
+  MicroVeriVM.RiscV.Execution `
+  MicroVeriVM.RiscV.TrapHandling `
+  MicroVeriVM.RiscV.SystemIntegration `
+  MicroVeriVM.RiscV.PrivilegedCSR `
+  MicroVeriVM.RiscV.Interrupts `
+  MicroVeriVM.RiscV.RetirementTrace `
+  MicroVeriVM.RiscV.ApplicationExecution `
   MicroVeriVM.Invariants `
   MicroVeriVM.Correspondence `
   MicroVeriVM.Syntax `
@@ -156,7 +176,9 @@ coqchk -Q coq MicroVeriVM `
   MicroVeriVM.Bridge.RustLite `
   MicroVeriVM.Bridge.Simulation `
   MicroVeriVM.Bridge.TraceEquiv `
-  MicroVeriVM.Extraction
+  MicroVeriVM.Extraction `
+  MicroVeriVM.RiscV.BisimulationRefinement `
+  MicroVeriVM.RiscV.SystemInvariants
 ```
 
 Expected result includes `Modules were successfully checked`.
@@ -180,10 +202,11 @@ Both report `Closed under the global context`.
 |-- LICENSE-APACHE
 |-- _CoqProject
 |-- coq/
+|   |-- RiscV/                # RV32I semantics, system, trace, and invariant modules
 |   |-- RustModel.v, Invariants.v, Correspondence.v
 |   |-- Syntax.v, Semantics.v, Proofs.v, Equivalence.v, Soundness.v
 |   |-- CanonicalAST.v, TargetAST.v, Extraction.v
-|   `-- Bridge/
+|   |-- Bridge/
 |       |-- RustLite.v
 |       |-- Simulation.v
 |       `-- TraceEquiv.v
@@ -193,6 +216,13 @@ Both report `Closed under the global context`.
 |-- docs/
 |   |-- ARCHITECTURE.md
 |   |-- WHITE-PAPER.md
+|   |-- rv32i-phase1.md
+|   |-- rv32i-phase2.md
+|   |-- rv32i-phase3.md
+|   |-- rv32i-phase4.md
+|   |-- rv32i-phase5.md
+|   |-- rv32i-phase6.md
+|   |-- rv32i-phase7.md
 |   `-- project and phase notes
 `-- .github/workflows/        # CI workflows
 ```
