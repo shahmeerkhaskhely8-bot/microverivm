@@ -1,241 +1,194 @@
-﻿# MicroVeriVM
+# MicroVeriVM 🦀
 
-MicroVeriVM is a deterministic, bounded 32-bit stack virtual machine with a safe `no_std` Rust runtime and a machine-checked Rocq (Coq) semantics and forward-simulation proof.
+MicroVeriVM is a lightweight, deterministic 32-bit stack virtual machine
+implemented in safe Rust. It provides bounded stack and memory storage,
+explicit execution errors, and a numeric program counter. The repository also
+contains Rocq (Coq) models and machine-checked proofs for the stack VM and a
+separate RV32I instruction subset.
 
-The repository also contains a separate RV32I formalization in `coq/RiscV/`. Its modules define a 32-bit word model, x0-safe register file, aligned-PC state, a typed instruction/decode contract for a named RV32I subset, small-step execution, memory-safety results, finite traces, binary-image integration, traps, privileged-state and interrupt models, retirement/PC event traces, application safety composition, and model-level refinement results. The image contract begins with word-sized text and data segments supplied by an external loader; ELF parsing and byte-level loading are outside the proof. The RV32I machine is not the Rust stack VM, and no equivalence between those architectures is claimed.
+## Why this machine
 
-It is intentionally small enough to inspect end to end: ten instructions, a 256-word stack, 1024 words of memory, explicit traps, numeric program-counter targets, and arithmetic defined modulo 2^32. The project is both a systems-engineering example and a practical teaching artifact for formal semantics and proof-assisted development.
+MicroVeriVM makes execution boundaries explicit: the stack and memory have
+fixed capacities, invalid accesses return named errors, and arithmetic
+overflow has defined wrapping behavior. These choices make the modeled
+behavior easier to inspect and test than an implementation with implicit
+bounds or overflow assumptions. The crate is designed for educational and
+systems-programming use; the repository's formal results apply to the stated
+Coq models and do not prove the Rust implementation itself.
 
-> **Verification scope:** The legacy `TargetAST.v` to RustLite bridge proves forward simulation for successful steps and traces. A distinct Rust-shaped Coq model has bidirectional step and successful-trace correspondence with its Rocq semantics. Neither result proves the Rust source or machine code, relates the RV32I model to the stack VM, or establishes correspondence for all failure behaviors. `coqchk` validates the compiled Coq proof objects; Rust is built, linted, and tested independently.
+The Rust crate is a `no_std` library that forbids unsafe code and does not
+dynamically allocate VM stack or memory. Its transition behavior, capacities,
+and validation limits are documented below rather than implying broader
+security or reliability guarantees.
 
-## Highlights
+The stack VM has ten instructions, a 256-word operand stack, and 1024 words of
+memory. `ADD`, `SUB`, and sequential PC advancement use modulo-\(2^{32}\)
+wrapping semantics. Stack underflow/overflow, invalid addresses, and invalid
+program counters are reported as named errors.
 
-- **Deterministic word semantics:** `ADD`, `SUB`, and program-counter advancement wrap modulo 2^32, matching `u32::wrapping_add` and `u32::wrapping_sub`.
-- **Bounded state:** The runtime stack has 256 words and memory has 1024 words, both stored in fixed-size arrays.
-- **Explicit failure behavior:** Stack underflow/overflow, invalid memory addresses, and invalid program counters return named errors.
-- **Safe runtime:** The crate uses `#![no_std]` and `#![forbid(unsafe_code)]`; VM state does not use dynamic allocation.
-- **Closed bridge proofs:** The project-level Coq sources contain no `Admitted`, `admit`, `Axiom`, or `Abort` placeholders. The main step- and trace-simulation theorems report “Closed under the global context.”
-- **Kernel validation:** The Coq gate compiles all 30 configured modules sequentially and checks them with `coqchk`.
-
-## Architecture
-
-The formal bridge has five layers:
-
-1. **RustLite** (`coq/Bridge/RustLite.v`) defines a small statement language, environment, and fuel-bounded evaluator.
-2. **Target machine** (`coq/TargetAST.v`) defines the ten target instructions and their step semantics over the Rust model.
-3. **Representation relation** (`st_rel` in `coq/Bridge/Simulation.v`) relates the formal VM's PC, stack, memory, and status to the RustLite environment.
-4. **Fetch and instruction simulation** (`coq/Bridge/Simulation.v`) proves instruction cases and connects indexed target fetch to the ordered RustLite fetch chain.
-5. **Trace lifting** (`coq/Bridge/TraceEquiv.v`) lifts successful target traces to RustLite executions using the proved per-step simulation.
-
-```mermaid
-flowchart LR
-    A["TargetAST.v<br/>target_step / target_success_trace"]
-    B["st_rel<br/>VM state <-> RustLite environment"]
-    C["Simulation.v<br/>instruction simulation + PC dispatch"]
-    D["RustLite.v<br/>lower_fetch + fuel-bounded evaluator"]
-    E["TraceEquiv.v<br/>successful-trace forward simulation"]
-    R["Rust runtime<br/>no_std, fixed-size arrays"]
-    T["cargo checks and tests<br/>independent implementation validation"]
-
-    A --> B
-    A --> C
-    B --> C
-    C --> D
-    C --> E
-    D --> E
-    R --> T
-```
-
-The target-to-RustLite trace result is a **forward simulation for traces whose target steps succeed**. It does not assert reverse simulation or failure-trace equivalence for that bridge. The separate Rust-shaped model correspondence does not verify executable Rust. See [the architecture guide](docs/ARCHITECTURE.md) for proof boundaries and [the white paper](docs/WHITE-PAPER.md) for the formal model, proof methodology, and limitations.
-
-## RV32I formalization
-
-The RV32I contract is developed independently of the legacy stack-machine correspondence in [`coq/RiscV/`](coq/RiscV/). The repository includes later modules for privileged state, interrupts, retirement/event traces, application execution, model-level stack-VM correspondence, and top-level system invariants. The detailed phase guides currently cover [Phase 1 foundations](docs/rv32i-phase1.md), [Phase 2 instruction decoding](docs/rv32i-phase2.md), [Phase 3 operational semantics](docs/rv32i-phase3.md), [Phase 4 memory safety](docs/rv32i-phase4.md), [Phase 5 multi-step execution](docs/rv32i-phase5.md), [Phase 6 system integration](docs/rv32i-phase6.md), and [Phase 7 trap handling](docs/rv32i-phase7.md).
-
-## Instruction set
+## Supported stack instructions
 
 | Instruction | Behavior |
 | --- | --- |
-| `CONST(u32)` | Push a word and advance the PC. |
-| `ADD` | Pop right then left, push `left.wrapping_add(right)`, advance the PC. |
-| `SUB` | Pop right then left, push `left.wrapping_sub(right)`, advance the PC. |
-| `DUP` | Duplicate the top word and advance the PC. |
-| `DROP` | Pop the top word and advance the PC. |
-| `LOAD(address)` | Load memory and push the word, then advance the PC. |
-| `STORE(address)` | Pop a word and store it at the checked address, then advance the PC. |
-| `JMP(target)` | Set the PC to a valid numeric target. |
-| `JZ(target)` | Pop a condition; jump if zero, otherwise advance the PC. |
-| `HALT` | Mark the state halted. |
+| `CONST(value)` | Push a 32-bit value. |
+| `ADD` | Pop two values and push their wrapping sum. |
+| `SUB` | Pop two values and push the wrapping difference (left minus right). |
+| `DUP` | Duplicate the top value. |
+| `DROP` | Remove the top value. |
+| `LOAD(address)` | Load a word from memory and push it. |
+| `STORE(address)` | Pop a word and store it at the checked address. |
+| `JMP(target)` | Set the PC to a valid numeric instruction index. |
+| `JZ(target)` | Pop a condition; jump when zero, otherwise advance. |
+| `HALT` | Halt without changing the remaining machine state. |
 
-Labels are not part of the runtime instruction language. An external assembler must resolve labels to numeric PC targets before the VM runs; that assembler pass is outside the formal scope of verification v1.
+Labels are not part of the runtime instruction language. If programs are
+assembled from symbolic labels, an external assembler must resolve them to
+numeric PC targets before execution. That assembler is outside the v1 formal
+verification boundary.
 
-## Requirements
+## Installation and getting started
 
-- **Rust:** stable Rust toolchain with Cargo. On Windows, use the `x86_64-pc-windows-msvc` target and a compatible Visual Studio Build Tools installation when required by the toolchain.
-- **Rocq/Coq:** Rocq Platform 9.1 or compatible `coqc`/`coqchk` executables. Put the toolchain's `bin` directory on `PATH` for direct commands. The PowerShell gate also checks several common Windows install locations.
-- **PowerShell:** Windows PowerShell for `scripts/check-coq.ps1`.
-- **Windows test runtime:** If a Windows Rust test executable cannot start because an MSVC runtime DLL is unavailable, install the matching Visual C++ runtime or use the static CRT flag shown below.
+Install stable Rust and Cargo, then clone the repository:
 
-## Set up a development environment
+```sh
+git clone https://github.com/shahmeerkhaskhely8-bot/microverivm.git
+cd microverivm
+```
 
-1. Install Visual Studio Build Tools with the **Desktop development with C++** workload when using the Windows MSVC Rust target.
-2. Install Rust through rustup, then select the stable toolchain and MSVC target:
+The crate exposes a Rust library; it does **not** currently provide a
+standalone command-line executable. From the repository root, compile all
+targets and run the unit and integration tests:
 
-   ```powershell
-   rustup toolchain install stable --profile minimal
-   rustup default stable
-   rustup target add x86_64-pc-windows-msvc
-   rustc --version
-   cargo --version
-   ```
+```sh
+cargo check --locked --all-targets
+cargo test --locked --all-targets
+```
 
-3. Install Rocq Platform 9.1 or a compatible Rocq distribution. Add its `bin` directory to the current user's `PATH`, then confirm both tools resolve:
+To build all configured targets:
 
-   ```powershell
-   coqc --version
-   coqchk --version
-   ```
+```sh
+cargo build --locked --all-targets
+```
 
-4. Open PowerShell in the repository root. The commands below are written for that location. If Cargo's default test executable cannot start due to a missing MSVC runtime DLL, use the static CRT test invocation in the Rust section.
+Example library use:
 
-## Build, test, and verify
+```rust
+use microverivm::{
+    error::Error,
+    execute::step,
+    instruction::Instruction,
+    state::{State, Status},
+};
 
-Run the commands from the repository root.
+fn run_example() -> Result<u32, Error> {
+    let program = [
+        Instruction::CONST(20),
+        Instruction::CONST(22),
+        Instruction::ADD,
+        Instruction::HALT,
+    ];
+    let mut state = State::new();
 
-### Rust checks
+    while state.status() == Status::Running {
+        step(&mut state, &program)?;
+    }
 
-```powershell
+    state.stack().peek()
+}
+```
+
+The public stepping API executes one instruction per call. A client can drive
+execution by calling `step` until the status becomes `Halted` or an `Error` is
+returned.
+
+## Formal models and verification scope
+
+There are two separate formal developments in this repository:
+
+1. The legacy stack-machine Coq development defines a target semantics,
+   RustLite evaluator, representation relation, and successful-step/trace
+   forward simulation from the target model to RustLite.
+2. The RV32I development under [`coq/RiscV/`](coq/RiscV/) defines a 32-bit
+   word model, x0-safe register file, aligned PC, a typed decoder and selected
+   instruction semantics, memory and execution invariants, trap and interrupt
+   extensions, retirement/event traces, and application-level safety results.
+
+The RV32I model accepts word-sized text and data segments from an external
+loader; it does not parse ELF files or verify byte-level loading. It is not the
+Rust stack VM. The `BisimulationRefinement.v` results concern a Rust-shaped
+Coq model and its separate Rocq semantics. They do not prove that the Rust
+source or compiled binary refines either formal model, and they do not relate
+RV32I execution to the stack-machine instruction set.
+
+The project gate checks for `Admitted`, `admit`, `Axiom`, and `Abort` tokens,
+compiles 30 configured Coq modules, and validates their proof objects with
+`coqchk`. The formal claims are limited to their stated definitions and
+premises; kernel checking is not a proof of the Rust compiler, external
+loader, or execution platform.
+
+For details, see the [architecture guide](docs/ARCHITECTURE.md), the
+[research paper](docs/WHITE-PAPER.md), and the [RV32I phase guides](docs/).
+
+## Development and verification
+
+Requirements:
+
+- Stable Rust toolchain with Cargo.
+- Rocq/Coq with `coqc` and `coqchk` available. The PowerShell gate checks
+  common Windows install locations if `coqc` is not on `PATH`.
+- PowerShell to run the repository's Coq scripts.
+
+Rust checks:
+
+```sh
 cargo fmt --all -- --check
 cargo check --locked --all-targets
 cargo build --locked --all-targets
 cargo clippy --locked --all-targets -- -D warnings
-```
-
-Expected result: each command exits successfully; formatting emits no differences, and Clippy emits no warnings.
-
-Run the Rust tests:
-
-```powershell
 cargo test --locked --all-targets
 ```
 
-On Windows MSVC systems without the required dynamic runtime DLLs, statically link the CRT for this invocation:
+Run the complete local pipeline (sequential Coq compilation, placeholder
+scan, `coqchk`, and Rust quality gates) from PowerShell:
 
 ```powershell
-$env:RUSTFLAGS = "-C target-feature=+crt-static"
-cargo test --locked --all-targets
-Remove-Item Env:RUSTFLAGS
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-pipeline.ps1
 ```
 
-Expected result: unit and integration test executables run and report all tests passing. The static-link flag is a test-host workaround, not a project source or manifest setting.
-
-### Coq compile and kernel gate
-
-Run the authoritative sequential compilation and kernel-validation script:
+To run only the Coq compile and kernel-validation gate:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\check-coq.ps1
 ```
 
-Expected final line:
+On Windows, if a test executable cannot start because an MSVC runtime DLL is
+missing, install the matching Visual C++ runtime. Alternatively, set
+`RUSTFLAGS="-C target-feature=+crt-static"` for the test invocation; this is a
+host linking option, not a change to VM memory management.
 
-```text
-PASS: all thirty files compiled sequentially; coqchk validated all thirty modules
-```
-
-The gate writes detailed status and compiler logs under `coq/build-check/`. Its successful exit means each of the 30 configured modules compiled with no diagnostics, required extraction artifacts were present, and `coqchk` validated all listed modules. A separate scan rejects `Admitted`, `admit`, `Axiom`, and `Abort` tokens in Coq source files.
-
-To invoke `coqchk` directly after the script has compiled the modules, ensure the Rocq `bin` directory is on `PATH` and run:
-
-```powershell
-coqchk -Q coq MicroVeriVM `
-  MicroVeriVM.RustModel `
-  MicroVeriVM.RiscV.Word `
-  MicroVeriVM.RiscV.RegisterFile `
-  MicroVeriVM.RiscV.Machine `
-  MicroVeriVM.RiscV.Instruction `
-  MicroVeriVM.RiscV.Decoder `
-  MicroVeriVM.RiscV.Semantics `
-  MicroVeriVM.RiscV.MemorySafety `
-  MicroVeriVM.RiscV.Execution `
-  MicroVeriVM.RiscV.TrapHandling `
-  MicroVeriVM.RiscV.SystemIntegration `
-  MicroVeriVM.RiscV.PrivilegedCSR `
-  MicroVeriVM.RiscV.Interrupts `
-  MicroVeriVM.RiscV.RetirementTrace `
-  MicroVeriVM.RiscV.ApplicationExecution `
-  MicroVeriVM.Invariants `
-  MicroVeriVM.Correspondence `
-  MicroVeriVM.Syntax `
-  MicroVeriVM.Semantics `
-  MicroVeriVM.Proofs `
-  MicroVeriVM.Equivalence `
-  MicroVeriVM.Soundness `
-  MicroVeriVM.CanonicalAST `
-  MicroVeriVM.TargetAST `
-  MicroVeriVM.Bridge.RustLite `
-  MicroVeriVM.Bridge.Simulation `
-  MicroVeriVM.Bridge.TraceEquiv `
-  MicroVeriVM.Extraction `
-  MicroVeriVM.RiscV.BisimulationRefinement `
-  MicroVeriVM.RiscV.SystemInvariants
-```
-
-Expected result includes `Modules were successfully checked`.
-
-For example, inspect the assumptions of the principal bridge theorems in `coqtop`:
-
-```coq
-Require Import MicroVeriVM.Bridge.TraceEquiv.
-Print Assumptions MicroVeriVM.Bridge.Simulation.target_step_simulation.
-Print Assumptions MicroVeriVM.Bridge.TraceEquiv.run_sim_from_step_simulation.
-```
-
-Both report `Closed under the global context`.
-
-## Repository map
+## Repository layout
 
 ```text
 .
-|-- Cargo.toml, Cargo.lock, Makefile
-|-- README.md
-|-- LICENSE-APACHE
-|-- _CoqProject
-|-- coq/
-|   |-- RiscV/                # RV32I semantics, system, trace, and invariant modules
-|   |-- RustModel.v, Invariants.v, Correspondence.v
-|   |-- Syntax.v, Semantics.v, Proofs.v, Equivalence.v, Soundness.v
-|   |-- CanonicalAST.v, TargetAST.v, Extraction.v
-|   |-- Bridge/
-|       |-- RustLite.v
-|       |-- Simulation.v
-|       `-- TraceEquiv.v
-|-- rust/src/                 # Safe no_std implementation
+|-- rust/src/                 # no_std Rust stack VM library
 |-- tests/                    # Rust integration tests
-|-- scripts/                  # PowerShell validation gates
-|-- docs/
-|   |-- ARCHITECTURE.md
-|   |-- WHITE-PAPER.md
-|   |-- rv32i-phase1.md
-|   |-- rv32i-phase2.md
-|   |-- rv32i-phase3.md
-|   |-- rv32i-phase4.md
-|   |-- rv32i-phase5.md
-|   |-- rv32i-phase6.md
-|   |-- rv32i-phase7.md
-|   `-- project and phase notes
-`-- .github/workflows/        # CI workflows
+|-- coq/                      # stack VM models, proofs, and bridge
+|   |-- RiscV/                # separate RV32I formal development
+|   `-- Bridge/               # RustLite and target simulation proofs
+|-- scripts/                  # PowerShell verification gates
+|-- .github/workflows/        # Rust and Rocq CI workflows
+|-- docs/                     # architecture, research, and phase documents
+|-- Cargo.toml
+|-- _CoqProject
+`-- LICENSE-APACHE
 ```
 
 ## Contributing
 
-Contributions should preserve the VM's bounded, deterministic semantics and keep implementation, formal model, and documentation aligned.
-
-1. Keep runtime code safe: do not introduce `unsafe` or heap allocation into VM state.
-2. Update the Coq semantics and bridge whenever instruction behavior changes. Close proofs with checked terms; do not add `Admitted`, `admit`, `Axiom`, or `Abort`.
-3. Add or adjust Rust tests for success paths, traps, and relevant boundary values.
-4. Run the Rust checks and the Coq gate above before opening a pull request.
-5. Document any intentional scope boundary or behavior change.
+Keep implementation, formal definitions, and tests aligned when behavior
+changes. Add tests for boundary and error cases, close all Coq proofs without
+admitted placeholders or project axioms, and run the Rust checks and Coq gate
+before submitting changes.
 
 ## License
 
